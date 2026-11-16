@@ -60,7 +60,7 @@ else
     </div>
     <p class="meta-mono mt-4">
         server list synced <LocalTime Utc="guilds.SnapshotAtUtc" Format="g" /> ·
-        <a href="@AuthApi.BuildLoginUrl("/app")">↻ re-sync</a>
+        <a href="@AuthApi.BuildLoginUrl("/app?all=1")">↻ re-sync</a>
     </p>
 }
 
@@ -78,7 +78,17 @@ else
         }
 
         guilds = result.Value;
+
+        // Signed in and in exactly one CalCrony server (the normal case for a single-community
+        // deployment): skip the picker and land on that server's events. "?all" (the sidebar's
+        // "My servers" link and the back links) always shows the list.
+        if (guilds.Guilds.Count == 1 && !ShowAll)
+        {
+            Nav.NavigateTo($"/app/guilds/{guilds.Guilds[0].Id}/events", replace: true);
+        }
     }
+
+    private bool ShowAll => System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["all"] is not null;
 
     private void Open(long guildId) => Nav.NavigateTo($"/app/guilds/{guildId}/events");
 

@@ -1,8 +1,24 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
+@inject NavigationManager Nav
 
 <PageTitle>CalCrony — events &amp; calendars for Discord</PageTitle>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Signed-in visitors have no use for the marketing page: send them to the app, which in turn
+    // opens their server's events. Anonymous visitors (and Google's verification crawler) still
+    // get the page below, unchanged.
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true)
+        {
+            Nav.NavigateTo("/app", replace: true);
+        }
+    }
+}
 
 <p class="meta-mono text-uppercase mb-2">CalCrony — open source · use calcrony.app or run your own · for your Discord server</p>
 <h1 class="display-6" style="letter-spacing:.01em">
