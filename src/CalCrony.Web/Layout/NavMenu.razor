@@ -10,13 +10,14 @@
    the placement at lg+, where the element is a normal in-flow sidebar column). *@
 <nav id="appSidebar" class="app-sidebar offcanvas-lg offcanvas-top" tabindex="-1" aria-label="Main navigation">
     <div class="sidebar-inner">
-        <div class="d-flex align-items-start justify-content-between px-2 pb-3">
+        <div class="sidebar-head d-flex align-items-start justify-content-between px-2 pb-3">
             <div class="sidebar-brand d-flex align-items-center gap-2">
                 <BrandMark Size="26" />
                 @* No tagline here — the homepage hero already says it, and it bled off the
                    sidebar; the wordmark centers vertically beside the d20 instead. *@
                 <div class="wordmark">
                     <b>Cal</b><span class="nav-label">Crony</span>
+                    <span class="wcl-tag nav-label">West Country Leaders</span>
                 </div>
             </div>
             <button class="btn-close d-lg-none" type="button" data-bs-dismiss="offcanvas" data-bs-target="#appSidebar" aria-label="Close menu"></button>
@@ -33,7 +34,7 @@
         </a>
 
         <div class="sidebar-eyebrow nav-label">The app</div>
-        <NavLink class="nav-link" href="/app" Match="NavLinkMatch.All">
+        <NavLink class="nav-link" href="/app?all=1" Match="NavLinkMatch.All">
             <span class="nav-ic">▤</span><span class="nav-label">My servers</span>
         </NavLink>
         <NavLink class="nav-link" href="/app/settings">
@@ -51,7 +52,7 @@
                             <a class="meta-mono" href="" @onclick="LogoutAsync" @onclick:preventDefault>sign out</a>
                         </div>
                     </div>
-                    <a class="meta-mono px-2 nav-label" href="@AuthApi.BuildLoginUrl("/app")">↻ re-sync servers</a>
+                    <a class="meta-mono px-2 nav-label" href="@AuthApi.BuildLoginUrl("/app?all=1")">↻ re-sync servers</a>
                 </Authorized>
                 <NotAuthorized>
                     <NavLink class="nav-link" href="/login">
