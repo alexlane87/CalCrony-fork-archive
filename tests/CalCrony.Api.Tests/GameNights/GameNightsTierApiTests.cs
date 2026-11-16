@@ -189,7 +189,7 @@ public class GameNightsTierApiTests(GameNightsFixture fixture) : IClassFixture<G
         await PutMappingAsync(guild);
 
         var watched = await Bot.GetFromJsonAsync<GuildWatchedRolesDto>($"/guilds/{guild}/roles/watched");
-        Assert.Equal([AdminRole, ModeratorRole, OrganiserRole], watched!.RoleIds.Order());
+        Assert.Equal([OrganiserRole, ModeratorRole, AdminRole], watched!.RoleIds.Order());
 
         await Bot.PutAsJsonAsync($"/guilds/{guild}/game-nights/tier-roles", new PutTierRolesRequest([]));
         var after = await Bot.GetFromJsonAsync<GuildWatchedRolesDto>($"/guilds/{guild}/roles/watched");
