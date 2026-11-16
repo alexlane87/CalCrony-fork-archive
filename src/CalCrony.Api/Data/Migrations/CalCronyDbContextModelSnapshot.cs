@@ -1050,6 +1050,53 @@ namespace CalCrony.Api.Data.Migrations
                     b.ToTable("WebRefreshTokens");
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightEventExtension", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Visibility")
+                        .HasColumnType("integer");
+
+                    b.HasKey("EventId");
+
+                    b.ToTable("GameNightEventExtensions");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightInvite", b =>
+                {
+                    b.Property<int>("Scope")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Scope", "ScopeId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("GameNightInvites");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightsTierRole", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RoleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Tier")
+                        .HasColumnType("integer");
+
+                    b.HasKey("GuildId", "RoleId");
+
+                    b.ToTable("GameNightsTierRoles");
+                });
+
             modelBuilder.Entity("CalCrony.Api.Data.Event", b =>
                 {
                     b.HasOne("CalCrony.Api.Data.EventSeries", "Series")
@@ -1119,6 +1166,15 @@ namespace CalCrony.Api.Data.Migrations
                     b.HasOne("CalCrony.Api.Data.EventSeries", null)
                         .WithMany("NotificationSpecs")
                         .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightEventExtension", b =>
+                {
+                    b.HasOne("CalCrony.Api.Data.Event", null)
+                        .WithOne()
+                        .HasForeignKey("CalCrony.Api.GameNights.GameNightEventExtension", "EventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

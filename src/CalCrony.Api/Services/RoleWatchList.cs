@@ -78,6 +78,17 @@ public static class RoleWatchList
             Add(watched, poll.GuildId, poll.AllowedRoleIds);
         }
 
+        // Fork (Game Nights): roles mapped to a tier are watched permanently, or their holders
+        // would never be snapshotted and retention would drop the guild's snapshot.
+        var fromTiers = await db.GameNightsTierRoles
+            .Where(t => guildId == null || t.GuildId == guildId)
+            .Select(t => new { t.GuildId, t.RoleId })
+            .ToListAsync(cancellationToken);
+        foreach (var tier in fromTiers)
+        {
+            Add(watched, tier.GuildId, [tier.RoleId]);
+        }
+
         return watched;
     }
 

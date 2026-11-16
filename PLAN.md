@@ -88,7 +88,7 @@ Tasks:
 
 Done when: build and tests are green, FORK-NOTES.md exists with the answers above, and any assumption in this plan that turned out wrong is listed at the top of that file.
 
-### [ ] Step 1: Extension scaffolding, tiers and the visibility flag
+### [x] Step 1: Extension scaffolding, tiers and the visibility flag
 
 Goal: the seams everything else uses.
 

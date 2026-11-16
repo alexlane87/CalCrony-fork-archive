@@ -204,3 +204,54 @@ the Bot assembly (a folder) to be covered by it.
    fact. Alternative: show names only where the bot renders them (Discord posts), and on the web only if
    the owner accepts the disclosure change. Decide before Step 7.
 4. **Photo forwarding and private threads need the invite-permission change** (and a re-invite on prod).
+
+---
+
+# Step 1: scaffolding, tiers and the visibility flag
+
+**What landed.** Folder `src/CalCrony.Api/GameNights/` and `src/CalCrony.Contracts/GameNights/`; one
+migration (`GameNightsFoundation`, three additive tables); feature flag `GameNights:Enabled` (default
+off: no services, no routes; the tables exist regardless, empty).
+
+**Tiers.** `Member < Organiser < Moderator < Admin`, mapped from Discord roles per guild
+(`GameNightsTierRoles`). Resolved **per request** by `TierResolver` from the bot's role snapshots
+(decision 2): the bot counts as Admin (it checks Discord live); a web caller must be in the guild; a
+**server manager (Manage Server or owner) is Admin**, so a fresh server can set the mapping before any
+role exists; otherwise the highest mapped role held wins. If the snapshot cannot answer (guild not
+synced, marker older than 30 minutes, or a mapped role not yet checked) the tier is *unverified*:
+Member-level routes still work, everything above is refused with **409 `tier_unverifiable`**.
+Deleted mapped roles (null-name tombstone) stop counting.
+
+**Gate.** `.RequireTier(tier)` is an endpoint filter, not an ASP.NET policy (plan said policies): it needs the
+route's `guildId` and has two refusal shapes. Probes: `GET /guilds/{id}/game-nights/probe/{member|organiser|moderator|admin}`
+and `/me`. Admin config: `GET|PUT /guilds/{id}/game-nights/tier-roles` (PUT replaces the mapping; Member is
+not mappable; a role maps to one tier; max 50).
+
+**Visibility.** `GameNightEventExtensions` (EventId PK, FK to `Events`, cascade; no row = public),
+`GameNightInvites` (scope, scope id, user). `VisibilityFilter.VisibleTo`/`CanSeeEventAsync` mirror the pure
+`VisibilityRules.CanSee`; callers turn "not visible" into 404. **Provisional semantics** (no UI yet):
+Restricted = invitees + organisers up; InviteOnly = invitees + moderators up. `VisibilityRules.CanCarryLeague`
+(public only) is written and tested now; the database check constraint arrives with the league table (Step 9).
+
+**Core touch points (all of them).**
+
+| File | Edit |
+|---|---|
+| `Api/Program.cs` | `using`, `AddGameNights(config)`, `MapGameNights()` |
+| `Api/Data/CalCronyDbContext.cs` | `partial` keyword; `GameNightsModel.Apply(modelBuilder)` |
+| `Api/Services/RoleWatchList.cs` | union the tier-mapped roles into the watched set |
+| `Api/Data/Migrations/*` | new migration + snapshot (generated) |
+| `tests/.../WebAuthFixture.cs` | un-sealed so the Game Nights fixture can turn the flag on |
+
+**Deviations from the plan.** (1) Folders, not new projects (owner agreed). (2) The Bot and Web modules are
+**not created yet**: nothing in them would do anything until Step 2 (event post buttons, venue editor), so they
+start there rather than as empty shells. (3) Policies are endpoint filters (above). (4) Tier is per request, not
+a JWT claim (owner agreed).
+
+**Config needed on the Pi.** None to deploy (flag off). To try it on the test stack: `GameNights__Enabled=true` on
+the API in `~/calcrony-test/.env`/compose, then `PUT /guilds/{id}/game-nights/tier-roles` with the test server's
+role ids. Until the bot's next reconcile (every 10 minutes) checks the new roles, tiers above Member answer 409.
+
+**Verification.** Local .NET 10 SDK installed in `C:\Users\alexp\dotnet10-sdk` (user folder, not on PATH); the
+solution builds. Pure-rule tests pass locally; the database-backed tests need Docker, which was not running,
+so they run in CI.
