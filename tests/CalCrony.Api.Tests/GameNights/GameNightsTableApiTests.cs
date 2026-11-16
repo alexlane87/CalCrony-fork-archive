@@ -136,8 +136,9 @@ public class GameNightsTableApiTests(GameNightsFixture fixture) : IClassFixture<
         Assert.Contains("full", (await full.Content.ReadFromJsonAsync<ErrorResponse>())!.Error);
 
         // Cannot shrink below the seated count, and cannot be made too many people at creation.
+        var crowded = await CreateAsync(n, new CreateTableRequest(n.Root.Id, Size: 4, SeatUserIds: [71, 72, 73]));
         Assert.Equal(HttpStatusCode.Conflict, (await n.Organiser.PatchAsJsonAsync(
-            $"/guilds/{n.Guild}/game-nights/tables/{table.Id}", new UpdateTableRequest(Size: 1))).StatusCode);
+            $"/guilds/{n.Guild}/game-nights/tables/{crowded.Id}", new UpdateTableRequest(Size: 2))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await n.Organiser.PostAsJsonAsync(
             $"/guilds/{n.Guild}/game-nights/events/{n.EventId}/tables",
             new CreateTableRequest(n.Root.Id, Size: 2, SeatUserIds: [1, 2, 3]))).StatusCode);
