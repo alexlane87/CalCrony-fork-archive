@@ -102,7 +102,7 @@ Tests: tier resolution for each tier and for a member with no mapped role; polic
 
 Done when: a test endpoint per tier returns 200 for that tier and 403 for lower tiers, with no UI yet.
 
-### [ ] Step 2: Venues
+### [x] Step 2: Venues
 
 Goal: reusable venues with default attendee limits and per-event overrides.
 

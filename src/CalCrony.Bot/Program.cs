@@ -1,5 +1,6 @@
 using CalCrony.Bot;
 using CalCrony.Bot.Api;
+using CalCrony.Bot.GameNights;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
@@ -24,6 +25,7 @@ builder.Services.AddHttpClient<CalCronyApiClient>((sp, http) =>
     http.DefaultRequestHeaders.Add("X-Api-Key", config["Api:ApiKey"] ?? "");
 });
 
+builder.Services.AddGameNights(); // fork: Game Nights extension
 builder.Services.AddSingleton<NativeEventMirror>();
 builder.Services.AddSingleton<AttendeeRoleManager>();
 builder.Services.AddSingleton<EventThreadManager>();
