@@ -44,7 +44,7 @@ public class VenueComponentTests : TestContext
     [Fact]
     public void The_venues_tab_is_hidden_when_game_nights_is_off()
     {
-        var cut = Render<VenuesTab>(p => p.Add(c => c.GuildId, Guild));
+        var cut = Render<GameNightsTabs>(p => p.Add(c => c.GuildId, Guild));
 
         cut.WaitForState(() => true);
         Assert.Empty(cut.Markup.Trim());
@@ -55,7 +55,7 @@ public class VenueComponentTests : TestContext
     {
         Tier(GameNightsTier.Member);
 
-        var cut = Render<VenuesTab>(p => p.Add(c => c.GuildId, Guild).Add(c => c.Active, "venues"));
+        var cut = Render<GameNightsTabs>(p => p.Add(c => c.GuildId, Guild).Add(c => c.Active, "venues"));
 
         cut.WaitForAssertion(() => Assert.Contains("Venues", cut.Markup));
         Assert.Contains("btn-primary", cut.Markup);

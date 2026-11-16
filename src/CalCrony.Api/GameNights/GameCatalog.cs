@@ -9,7 +9,7 @@ public static class GameCatalog
     /// <summary>Projects a stored game (fields and type links loaded) to its DTO.</summary>
     /// <param name="game">The game.</param>
     /// <returns>The DTO.</returns>
-    public static GameDto ToDto(GameNightGame game) => new(game.Id, game.Active, ToSpec(game));
+    public static GameDto ToDto(GameNightGame game) => new(game.Id, game.Active, ToSpec(game), game.RoleState, game.RoleNote);
 
     /// <summary>Projects a stored game to its definition.</summary>
     /// <param name="game">The game (fields and type links loaded).</param>

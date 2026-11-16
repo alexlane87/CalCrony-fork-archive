@@ -6,7 +6,7 @@
     <a class="btn @(Active == "polls" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/polls">Polls</a>
     <a class="btn @(Active == "templates" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/templates">Templates</a>
     <a class="btn @(Active == "activity" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/activity">Activity</a>
-    <VenuesTab GuildId="GuildId" Active="@Active" /> @* fork: Game Nights, shown only when switched on *@
+    <GameNightsTabs GuildId="GuildId" Active="@Active" /> @* fork: Game Nights, shown only when switched on *@
 </div>
 
 @code {

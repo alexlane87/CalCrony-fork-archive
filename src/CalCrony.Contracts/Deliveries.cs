@@ -60,6 +60,12 @@ public enum DeliveryType
 
     /// <summary>Game Nights (fork): someone sat down at, or left, a table that has a thread. Payload <see cref="GameNights.TableSeatChangePayload"/>.</summary>
     TableSeatChange = 18,
+
+    /// <summary>Game Nights (fork): create the Discord role members follow a game with. Payload <see cref="GameNights.CreateGameRolePayload"/>.</summary>
+    CreateGameRole = 19,
+
+    /// <summary>Game Nights (fork): give or take a game's follow role for one member. Payload <see cref="GameNights.GameRoleFollowPayload"/>.</summary>
+    GameRoleFollow = 20,
 }
 
 /// <summary>An outbox row the bot must post to Discord. PayloadJson deserializes per <see cref="Type"/>.</summary>

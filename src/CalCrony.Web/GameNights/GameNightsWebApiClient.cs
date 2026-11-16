@@ -112,12 +112,85 @@ public sealed class GameNightsWebApiClient(HttpClient http)
     public Task<ApiResult<EventVenueDto>> SetEventVenueAsync(long guildId, Guid eventId, SetEventVenueRequest request, CancellationToken ct = default) =>
         SendAsync<EventVenueDto>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue", request, ct), ct);
 
-    /// <summary>A server's active games.</summary>
+    /// <summary>A server's games (active ones unless retired ones are asked for).</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>
     /// <param name="ct">Cancels the request.</param>
+    /// <param name="includeRetired">Include retired games.</param>
     /// <returns>The games, or the failure.</returns>
-    public Task<ApiResult<List<GameDto>>> ListGamesAsync(long guildId, CancellationToken ct = default) =>
-        SendAsync<List<GameDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/games", ct), ct);
+    public Task<ApiResult<List<GameDto>>> ListGamesAsync(long guildId, CancellationToken ct = default, bool includeRetired = false) =>
+        SendAsync<List<GameDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/games?includeRetired={includeRetired}", ct), ct);
+
+    /// <summary>Adds a game to the library.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="spec">The game's definition.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The created game, or the failure.</returns>
+    public Task<ApiResult<GameDto>> CreateGameAsync(long guildId, GameSpec spec, CancellationToken ct = default) =>
+        SendAsync<GameDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/games", spec, ct), ct);
+
+    /// <summary>Replaces a game's definition (used to attach or change its role).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="spec">The new definition.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The game, or the failure.</returns>
+    public Task<ApiResult<GameDto>> UpdateGameAsync(long guildId, Guid gameId, GameSpec spec, CancellationToken ct = default) =>
+        SendAsync<GameDto>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/games/{gameId}", spec, ct), ct);
+
+    /// <summary>Retires or reinstates a game.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="active">True to reinstate, false to retire.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The game, or the failure.</returns>
+    public Task<ApiResult<GameDto>> SetGameActiveAsync(long guildId, Guid gameId, bool active, CancellationToken ct = default) =>
+        SendAsync<GameDto>(http.PostAsync($"/guilds/{guildId}/game-nights/games/{gameId}/{(active ? "reinstate" : "retire")}", null, ct), ct);
+
+    /// <summary>Asks the bot to create the game's Discord role.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The game (role pending), or the failure.</returns>
+    public Task<ApiResult<GameDto>> RequestRoleAsync(long guildId, Guid gameId, CancellationToken ct = default) =>
+        SendAsync<GameDto>(http.PostAsync($"/guilds/{guildId}/game-nights/games/{gameId}/role/create", null, ct), ct);
+
+    /// <summary>Follows or unfollows a game (the bot gives or takes its role).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="follow">True to follow.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>Success once the request is queued, or the failure.</returns>
+    public Task<ApiResult<Unit>> FollowGameAsync(long guildId, Guid gameId, bool follow, CancellationToken ct = default) =>
+        SendAsync<Unit>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/games/{gameId}/follow", new FollowGameRequest(follow), ct), ct);
+
+    /// <summary>Which games the signed-in user follows, as far as the role snapshot can say.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The answer, or the failure.</returns>
+    public Task<ApiResult<FollowingResponse>> GetFollowingAsync(long guildId, CancellationToken ct = default) =>
+        SendAsync<FollowingResponse>(http.GetAsync($"/guilds/{guildId}/game-nights/games/following", ct), ct);
+
+    /// <summary>Applies the standard games file (Root, Arcs) to the server.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>What was added, or the failure.</returns>
+    public Task<ApiResult<SeedGamesResponse>> SeedGamesAsync(long guildId, CancellationToken ct = default) =>
+        SendAsync<SeedGamesResponse>(http.PostAsync($"/guilds/{guildId}/game-nights/games/seed", null, ct), ct);
+
+    /// <summary>The roles an admin has marked as game types.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The types, or the failure.</returns>
+    public Task<ApiResult<List<GameTypeDto>>> ListGameTypesAsync(long guildId, CancellationToken ct = default) =>
+        SendAsync<List<GameTypeDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/game-types", ct), ct);
+
+    /// <summary>Replaces the game-type list.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="types">The full list.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The saved list, or the failure.</returns>
+    public Task<ApiResult<List<GameTypeDto>>> PutGameTypesAsync(long guildId, IReadOnlyList<GameTypeDto> types, CancellationToken ct = default) =>
+        SendAsync<List<GameTypeDto>>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/game-types", new PutGameTypesRequest(types), ct), ct);
 
     /// <summary>A night's tables.</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>

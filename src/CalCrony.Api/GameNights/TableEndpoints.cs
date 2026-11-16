@@ -1,4 +1,3 @@
-using System.Text.Json;
 using CalCrony.Api.Auth;
 using CalCrony.Api.Data;
 using CalCrony.Contracts;
@@ -141,7 +140,7 @@ public static class TableEndpoints
         }
 
         // One thread per table, queued with the table itself so a crash can't leave one without the other.
-        Enqueue(db, clock, DeliveryType.CreateTableThread, ev.ChannelId, new CreateTableThreadPayload(table.Id, guildId));
+        GameNightOutbox.Enqueue(db, clock, DeliveryType.CreateTableThread, ev.ChannelId, new CreateTableThreadPayload(table.Id, guildId));
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -272,7 +271,7 @@ public static class TableEndpoints
         });
         if (table.ThreadId is not null)
         {
-            Enqueue(db, clock, DeliveryType.TableSeatChange, ev.ChannelId, new TableSeatChangePayload(table.Id, guildId, request.UserId, Joined: true));
+            GameNightOutbox.Enqueue(db, clock, DeliveryType.TableSeatChange, ev.ChannelId, new TableSeatChangePayload(table.Id, guildId, request.UserId, Joined: true));
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -320,7 +319,7 @@ public static class TableEndpoints
         if (table.ThreadId is not null)
         {
             var ev = await db.Events.AsNoTracking().FirstAsync(e => e.Id == table.EventId, cancellationToken);
-            Enqueue(db, clock, DeliveryType.TableSeatChange, ev.ChannelId, new TableSeatChangePayload(table.Id, guildId, userId, Joined: false));
+            GameNightOutbox.Enqueue(db, clock, DeliveryType.TableSeatChange, ev.ChannelId, new TableSeatChangePayload(table.Id, guildId, userId, Joined: false));
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -433,21 +432,6 @@ public static class TableEndpoints
             t.Id, t.EventId, t.GameId, names.GetValueOrDefault(t.GameId, "Game"), t.Number, t.Size, t.HostUserId, t.Status,
             t.ThreadId, t.Visibility,
             [.. t.Seats.Where(s => s.UserId is not null).OrderBy(s => s.SeatOrder).Select(s => new TableSeatDto(s.UserId!.Value, s.SeatOrder))]))];
-    }
-
-    private static void Enqueue<TPayload>(CalCronyDbContext db, IClock clock, DeliveryType type, long channelId, TPayload payload)
-    {
-        var now = clock.GetCurrentInstant();
-        db.Deliveries.Add(new Delivery
-        {
-            Id = Guid.NewGuid(),
-            Type = type,
-            ChannelId = channelId,
-            PayloadJson = JsonSerializer.Serialize(payload),
-            DueAt = now,
-            Status = DeliveryStatus.Pending,
-            CreatedAt = now,
-        });
     }
 
     private static IResult Bad(string message) => Results.BadRequest(new ErrorResponse(message));

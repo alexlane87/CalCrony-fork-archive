@@ -52,6 +52,12 @@ public class GameNightGame
     /// <summary>True once someone has edited a seeded game, so a newer file version no longer overwrites it.</summary>
     public bool LocallyEdited { get; set; }
 
+    /// <summary>Whether the follow role is being made, or the bot failed to make or grant it.</summary>
+    public GameRoleState RoleState { get; set; }
+
+    /// <summary>Why the role failed, in words an admin can act on.</summary>
+    public string? RoleNote { get; set; }
+
     /// <summary>The result questions.</summary>
     public List<GameNightGameField> Fields { get; set; } = [];
 

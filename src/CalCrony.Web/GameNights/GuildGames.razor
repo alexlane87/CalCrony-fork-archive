@@ -1,0 +1,344 @@
+@page "/app/guilds/{GuildId:long}/games"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+
+<PageTitle>Games — CalCrony</PageTitle>
+
+<p class="meta-mono text-uppercase mb-2"><a href="/app?all=1">← My servers</a></p>
+<GuildHeading GuildId="GuildId" />
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="h3 mb-0">Games</h1>
+        <GuildTabs GuildId="GuildId" Active="games" />
+    </div>
+    @if (CanEdit)
+    {
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="showRetiredGames" @bind="showRetired" @bind:after="LoadAsync" />
+            <label class="form-check-label meta-mono" for="showRetiredGames">show retired</label>
+        </div>
+    }
+</div>
+
+@if (disabled)
+{
+    <p class="text-body-secondary mt-3">Game Nights isn't switched on for this server.</p>
+}
+else if (games is null && error is not null)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+else if (games is null)
+{
+    <div class="spinner-border text-primary mt-3" role="status"></div>
+}
+else
+{
+    @if (error is not null)
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+
+    @if (notice is not null)
+    {
+        <div class="alert alert-success mt-3">@notice</div>
+    }
+
+    @if (!tier!.Verified)
+    {
+        <div class="alert alert-warning mt-3">We can't confirm your server roles right now, so editing is paused. Try again in a few minutes.</div>
+    }
+
+    @if (CanEdit)
+    {
+        <div class="d-flex gap-2 flex-wrap mt-3">
+            @if (!adding)
+            {
+                <button class="btn btn-primary btn-sm" @onclick="() => adding = true">＋ Add a game</button>
+            }
+            @if (IsAdmin)
+            {
+                <button class="btn btn-outline-primary btn-sm" disabled="@busy" @onclick="SeedAsync">Add the standard games (Root, Arcs)</button>
+            }
+        </div>
+
+        @if (adding)
+        {
+            <NewGameWizard GuildId="GuildId" TakenKeys="TakenKeys" OnCreated="Created" OnCancel="() => adding = false" />
+        }
+    }
+
+    @if (games.Count == 0)
+    {
+        <p class="text-body-secondary mt-3">No games yet@(CanEdit ? " — add one above." : ".")</p>
+    }
+
+    <div class="d-flex flex-column gap-3 mt-3">
+        @foreach (var game in games)
+        {
+            <div class="card p-3" @key="game.Id" data-testid="game-card">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="fs-5">🎲</span>
+                    <span class="fw-semibold flex-grow-1 min-w-0">@game.Spec.Name</span>
+                    @if (!game.Active)
+                    {
+                        <span class="badge text-bg-secondary">Retired</span>
+                    }
+                    <span class="badge text-bg-primary">@game.Spec.MinSize–@game.Spec.MaxSize players</span>
+                </div>
+                <div class="meta-mono mt-1">@ResultLabel(game.Spec.ResultType) · @game.Spec.Fields.Count(f => f.Kind != GameFieldKind.Player) result question@(game.Spec.Fields.Count(f => f.Kind != GameFieldKind.Player) == 1 ? "" : "s")</div>
+
+                @if (game.RoleState == GameRoleState.Pending)
+                {
+                    <div class="mt-2 text-body-secondary" data-testid="role-pending">⏳ The bot is creating this game's role…</div>
+                }
+                else if (game.RoleState == GameRoleState.Failed)
+                {
+                    <div class="alert alert-warning py-2 mt-2 mb-0" data-testid="role-warning">⚠️ @game.RoleNote</div>
+                }
+
+                @if (game.Active && game.Spec.RoleId is not null)
+                {
+                    <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                        <button class="btn @(Follows(game) ? "btn-success" : "btn-outline-success") btn-sm" disabled="@busy" @onclick="() => ToggleFollowAsync(game)">
+                            @(Follows(game) ? "🔔 Following" : "Follow")
+                        </button>
+                        @if (!followingKnown)
+                        {
+                            <span class="meta-mono">can't tell if you already follow this right now</span>
+                        }
+                    </div>
+                }
+
+                @if (CanEdit)
+                {
+                    <div class="d-flex gap-2 flex-wrap mt-2 align-items-center">
+                        @if (game.Spec.RoleId is null && game.RoleState != GameRoleState.Pending)
+                        {
+                            <button class="btn btn-outline-primary btn-sm" disabled="@busy" @onclick="() => RequestRoleAsync(game)">Create a role</button>
+                            @if (attaching == game.Id)
+                            {
+                                <input class="form-control form-control-sm" style="max-width:16rem" placeholder="Role ID" @bind="attachText" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => AttachAsync(game)">Attach</button>
+                                <button class="btn btn-link btn-sm" @onclick="() => attaching = null">Cancel</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => StartAttach(game)">Attach a role</button>
+                            }
+                        }
+                        <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => SetActiveAsync(game)">@(game.Active ? "Retire" : "Reinstate")</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (IsAdmin || types.Count > 0)
+    {
+        <h2 class="h5 mt-4 mb-2">Game types</h2>
+        <p class="text-body-secondary mb-2">Roles your members already use for what they're interested in (for example "Board games"). Marking them lets Game Nights group games and players by type.</p>
+        <ul class="list-unstyled" data-testid="types">
+            @foreach (var type in types)
+            {
+                <li class="py-1" @key="type.RoleId">
+                    @type.Label <span class="meta-mono">role @type.RoleId</span>
+                    @if (IsAdmin)
+                    {
+                        <button class="btn btn-link btn-sm p-0 text-danger ms-2" disabled="@busy" @onclick="() => RemoveTypeAsync(type)">Remove</button>
+                    }
+                </li>
+            }
+            @if (types.Count == 0)
+            {
+                <li class="text-body-secondary">None marked yet.</li>
+            }
+        </ul>
+        @if (IsAdmin)
+        {
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <input class="form-control form-control-sm" style="max-width:12rem" placeholder="Label" maxlength="@GameNightsTypeLabelLimit" @bind="newTypeLabel" @bind:event="oninput" />
+                <input class="form-control form-control-sm" style="max-width:16rem" placeholder="Role ID" @bind="newTypeRole" @bind:event="oninput" />
+                <button class="btn btn-primary btn-sm" disabled="@(busy || string.IsNullOrWhiteSpace(newTypeLabel) || string.IsNullOrWhiteSpace(newTypeRole))" @onclick="AddTypeAsync">Mark as a type</button>
+            </div>
+        }
+    }
+}
+
+@code {
+    private const int GameNightsTypeLabelLimit = 60;
+
+    [Parameter] public long GuildId { get; set; }
+
+    private MyTierResponse? tier;
+    private List<GameDto>? games;
+    private List<GameTypeDto> types = [];
+    private HashSet<Guid> following = [];
+    private bool followingKnown;
+    private string? error;
+    private string? notice;
+    private bool disabled;
+    private bool busy;
+    private bool adding;
+    private bool showRetired;
+    private Guid? attaching;
+    private string attachText = "";
+    private string newTypeLabel = "";
+    private string newTypeRole = "";
+
+    private bool CanEdit => tier is { Verified: true } && tier.Tier >= GameNightsTier.Organiser;
+
+    private bool IsAdmin => tier is { Verified: true } && tier.Tier >= GameNightsTier.Admin;
+
+    private IReadOnlyList<string> TakenKeys => [.. (games ?? []).Select(g => g.Spec.Key)];
+
+    private bool Follows(GameDto game) => following.Contains(game.Id);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            disabled = mine.NotFound;
+            error = mine.NotFound ? null : mine.Error;
+            return;
+        }
+
+        tier = mine.Value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await GameNights.ListGamesAsync(GuildId, includeRetired: showRetired);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        error = null;
+        games = result.Value ?? [];
+        types = (await GameNights.ListGameTypesAsync(GuildId)).Value ?? [];
+        var mineFollowing = await GameNights.GetFollowingAsync(GuildId);
+        followingKnown = mineFollowing.Value?.Known == true;
+        following = [.. mineFollowing.Value?.GameIds ?? []];
+    }
+
+    private async Task RunAsync(Func<Task<string?>> action, string? success = null, bool reload = true)
+    {
+        busy = true;
+        error = null;
+        notice = null;
+        try
+        {
+            error = await action();
+            if (error is null)
+            {
+                notice = success;
+                if (reload)
+                {
+                    await LoadAsync();
+                }
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Created(GameDto game)
+    {
+        adding = false;
+        notice = game.RoleState == GameRoleState.Pending
+            ? $"{game.Spec.Name} added. The bot is creating its role."
+            : $"{game.Spec.Name} added.";
+        await LoadAsync();
+    }
+
+    private Task SeedAsync() => RunAsync(async () =>
+    {
+        var result = await GameNights.SeedGamesAsync(GuildId);
+        notice = result.Success ? $"Standard games: {result.Value!.Created} added, {result.Value.Skipped + result.Value.Updated} already there." : null;
+        return result.Error;
+    });
+
+    private Task SetActiveAsync(GameDto game) => RunAsync(async () =>
+        (await GameNights.SetGameActiveAsync(GuildId, game.Id, !game.Active)).Error);
+
+    private Task RequestRoleAsync(GameDto game) => RunAsync(async () =>
+        (await GameNights.RequestRoleAsync(GuildId, game.Id)).Error, "The bot is creating the role.");
+
+    private void StartAttach(GameDto game)
+    {
+        attaching = game.Id;
+        attachText = "";
+    }
+
+    private Task AttachAsync(GameDto game) => RunAsync(async () =>
+    {
+        if (!long.TryParse(attachText.Trim(), out var roleId) || roleId <= 0)
+        {
+            return "Paste the role's ID: a long number copied from Discord.";
+        }
+
+        var result = await GameNights.UpdateGameAsync(GuildId, game.Id, game.Spec with { RoleId = roleId });
+        if (result.Success)
+        {
+            attaching = null;
+        }
+
+        return result.Error;
+    });
+
+    private Task ToggleFollowAsync(GameDto game) => RunAsync(async () =>
+    {
+        var follow = !Follows(game);
+        var result = await GameNights.FollowGameAsync(GuildId, game.Id, follow);
+        if (result.Success)
+        {
+            // The bot gives the role in a few seconds and the snapshot catches up after; show the intent now.
+            if (follow)
+            {
+                following.Add(game.Id);
+            }
+            else
+            {
+                following.Remove(game.Id);
+            }
+        }
+
+        return result.Error;
+    }, "Done. The bot will update your role in a few seconds.", reload: false); // keep the intent shown: the snapshot lags the role
+
+    private Task AddTypeAsync() => RunAsync(async () =>
+    {
+        if (!long.TryParse(newTypeRole.Trim(), out var roleId) || roleId <= 0)
+        {
+            return "Paste the role's ID: a long number copied from Discord.";
+        }
+
+        var next = types.Where(t => t.RoleId != roleId).Append(new GameTypeDto(roleId, newTypeLabel.Trim())).ToList();
+        var result = await GameNights.PutGameTypesAsync(GuildId, next);
+        if (result.Success)
+        {
+            newTypeLabel = "";
+            newTypeRole = "";
+        }
+
+        return result.Error;
+    });
+
+    private Task RemoveTypeAsync(GameTypeDto type) => RunAsync(async () =>
+        (await GameNights.PutGameTypesAsync(GuildId, [.. types.Where(t => t.RoleId != type.RoleId)])).Error);
+
+    private static string ResultLabel(GameResultType type) => type switch
+    {
+        GameResultType.RankedPlacement => "Finishing places",
+        GameResultType.SingleWinner => "Single winner",
+        GameResultType.WinningSide => "Winning side",
+        _ => "Result",
+    };
+}

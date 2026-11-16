@@ -1,17 +1,18 @@
-@* The "Venues" pill in the guild tab strip. Renders nothing unless Game Nights is switched on
-   for this deployment (the API answers 404 to its routes when it is not), so servers that have not
-   opted in never see a link to a feature that is not there. *@
+@* The Game Nights pills in the guild tab strip: Venues and Games. Renders nothing unless Game Nights is
+   switched on for this deployment (the API answers 404 to its routes when it is not), so servers that have
+   not opted in never see a link to a feature that is not there. *@
 @inject IServiceProvider Services
 
 @if (enabled)
 {
     <a class="btn @(Active == "venues" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/venues">Venues</a>
+    <a class="btn @(Active == "games" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/games">Games</a>
 }
 
 @code {
     [Parameter, EditorRequired] public long GuildId { get; set; }
 
-    /// <summary>The active tab; "venues" highlights this one.</summary>
+    /// <summary>The active tab; "venues" or "games" highlights that pill.</summary>
     [Parameter] public string Active { get; set; } = "";
 
     private bool enabled;
