@@ -54,6 +54,12 @@ public enum DeliveryType
 
     /// <summary>DM a user who opted in: a reminder or start announcement for an event they attend.</summary>
     DmEventReminder = 16,
+
+    /// <summary>Game Nights (fork): make a table's Discord thread. Payload <see cref="GameNights.CreateTableThreadPayload"/>.</summary>
+    CreateTableThread = 17,
+
+    /// <summary>Game Nights (fork): someone sat down at, or left, a table that has a thread. Payload <see cref="GameNights.TableSeatChangePayload"/>.</summary>
+    TableSeatChange = 18,
 }
 
 /// <summary>An outbox row the bot must post to Discord. PayloadJson deserializes per <see cref="Type"/>.</summary>

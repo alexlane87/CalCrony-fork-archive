@@ -1,0 +1,56 @@
+@page "/app/guilds/{GuildId:long}/tables/{TableId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+@inject AuthApiClient AuthApi
+
+<PageTitle>Table — CalCrony</PageTitle>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (table is null)
+{
+    <div class="spinner-border text-primary" role="status"></div>
+}
+else
+{
+    <p class="meta-mono text-uppercase mb-2"><a href="/app/events/@table.EventId">← Back to the game night</a></p>
+    <h1 class="h3 mb-3">@table.GameName, table @table.Number</h1>
+    <div style="max-width:560px">
+        <TableCard Table="table" GuildId="GuildId" UserId="UserId" CanOrganise="canOrganise" LinkToPage="false" OnChanged="t => table = t" />
+    </div>
+}
+
+@code {
+    [Parameter] public long GuildId { get; set; }
+
+    [Parameter] public Guid TableId { get; set; }
+
+    private TableDto? table;
+    private string? error;
+    private bool canOrganise;
+
+    private long UserId => AuthApi.Session?.UserId ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            error = mine.NotFound ? "Game Nights isn't switched on for this server." : mine.Error;
+            return;
+        }
+
+        canOrganise = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Organiser;
+        var result = await GameNights.GetTableAsync(GuildId, TableId);
+        if (!result.Success)
+        {
+            error = result.NotFound ? "That table doesn't exist, or you can't see it." : result.Error;
+            return;
+        }
+
+        table = result.Value;
+    }
+}

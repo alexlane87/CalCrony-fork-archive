@@ -112,6 +112,83 @@ public sealed class GameNightsWebApiClient(HttpClient http)
     public Task<ApiResult<EventVenueDto>> SetEventVenueAsync(long guildId, Guid eventId, SetEventVenueRequest request, CancellationToken ct = default) =>
         SendAsync<EventVenueDto>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue", request, ct), ct);
 
+    /// <summary>A server's active games.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The games, or the failure.</returns>
+    public Task<ApiResult<List<GameDto>>> ListGamesAsync(long guildId, CancellationToken ct = default) =>
+        SendAsync<List<GameDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/games", ct), ct);
+
+    /// <summary>A night's tables.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The event.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The tables, or the failure.</returns>
+    public Task<ApiResult<EventTablesDto>> ListTablesAsync(long guildId, Guid eventId, CancellationToken ct = default) =>
+        SendAsync<EventTablesDto>(http.GetAsync($"/guilds/{guildId}/game-nights/events/{eventId}/tables", ct), ct);
+
+    /// <summary>One table.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or the failure.</returns>
+    public Task<ApiResult<TableDto>> GetTableAsync(long guildId, Guid tableId, CancellationToken ct = default) =>
+        SendAsync<TableDto>(http.GetAsync($"/guilds/{guildId}/game-nights/tables/{tableId}", ct), ct);
+
+    /// <summary>Opens a table.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The event.</param>
+    /// <param name="request">The new table.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or the failure.</returns>
+    public Task<ApiResult<TableDto>> CreateTableAsync(long guildId, Guid eventId, CreateTableRequest request, CancellationToken ct = default) =>
+        SendAsync<TableDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/tables", request, ct), ct);
+
+    /// <summary>Changes a table's size or host.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="request">The changes.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or the failure.</returns>
+    public Task<ApiResult<TableDto>> UpdateTableAsync(long guildId, Guid tableId, UpdateTableRequest request, CancellationToken ct = default) =>
+        SendAsync<TableDto>(http.PatchAsJsonAsync($"/guilds/{guildId}/game-nights/tables/{tableId}", request, ct), ct);
+
+    /// <summary>Cancels a table.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or the failure.</returns>
+    public Task<ApiResult<TableDto>> CancelTableAsync(long guildId, Guid tableId, CancellationToken ct = default) =>
+        SendAsync<TableDto>(http.PostAsync($"/guilds/{guildId}/game-nights/tables/{tableId}/cancel", null, ct), ct);
+
+    /// <summary>Sits a person down at a table (members: themselves).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="userId">The Discord user id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or the failure.</returns>
+    public Task<ApiResult<TableDto>> SeatAsync(long guildId, Guid tableId, long userId, CancellationToken ct = default) =>
+        SendAsync<TableDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/tables/{tableId}/seats", new SeatRequest(userId), ct), ct);
+
+    /// <summary>Stands a person up from a table (members: themselves).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="userId">The Discord user id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or the failure.</returns>
+    public Task<ApiResult<TableDto>> UnseatAsync(long guildId, Guid tableId, long userId, CancellationToken ct = default) =>
+        SendAsync<TableDto>(http.DeleteAsync($"/guilds/{guildId}/game-nights/tables/{tableId}/seats/{userId}", ct), ct);
+
+    /// <summary>Sets the night's default table size.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The event.</param>
+    /// <param name="size">The size, or null to clear it.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The saved default, or the failure.</returns>
+    public Task<ApiResult<SetTableDefaultsRequest>> SetTableDefaultAsync(long guildId, Guid eventId, int? size, CancellationToken ct = default) =>
+        SendAsync<SetTableDefaultsRequest>(
+            http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/table-defaults", new SetTableDefaultsRequest(size), ct), ct);
+
     private static async Task<ApiResult<T>> SendAsync<T>(Task<HttpResponseMessage> sending, CancellationToken ct)
     {
         HttpResponseMessage response;

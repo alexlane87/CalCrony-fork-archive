@@ -32,6 +32,9 @@ public class GameNightEventExtension
 
     /// <summary>An organiser-set attendee limit for this event that beats the venue's.</summary>
     public int? LimitOverride { get; set; }
+
+    /// <summary>The size new tables start at on this night; null means use each game's own default.</summary>
+    public int? DefaultTableSize { get; set; }
 }
 
 /// <summary>What an invite list entry is attached to.</summary>

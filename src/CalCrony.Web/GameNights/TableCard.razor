@@ -1,0 +1,174 @@
+@* One table: its game, how full it is, who is sitting and who hosts, a link to its Discord thread, and
+   the buttons the viewer may use. A member can sit down or stand up themselves; organisers can also resize
+   the table, pick the host from the people sitting, and cancel it. The API enforces all of this; the
+   card only hides what the viewer cannot do. People show as "user {id}" like the RSVP list does, until
+   names are shown through the name service. *@
+@using CalCrony.Contracts.GameNights
+@inject IServiceProvider Services
+
+<div class="card p-3 @(Table.Status == TableStatus.Cancelled ? "opacity-50" : "")" data-testid="table-card">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="fs-5">🎲</span>
+        <span class="fw-semibold flex-grow-1 min-w-0">
+            @if (LinkToPage)
+            {
+                <a href="/app/guilds/@GuildId/tables/@Table.Id">@Table.GameName, table @Table.Number</a>
+            }
+            else
+            {
+                @($"{Table.GameName}, table {Table.Number}")
+            }
+        </span>
+        @if (Table.Status == TableStatus.Cancelled)
+        {
+            <span class="badge text-bg-secondary">Cancelled</span>
+        }
+        else if (Table.Status == TableStatus.Played)
+        {
+            <span class="badge text-bg-success">Played</span>
+        }
+        <span class="badge @(Full ? "text-bg-warning" : "text-bg-primary")" data-testid="seats">@Table.Seats.Count / @Table.Size seats</span>
+    </div>
+
+    <ul class="list-unstyled mt-2 mb-0">
+        @foreach (var seat in Table.Seats)
+        {
+            <li @key="seat.UserId" class="py-1">
+                user @seat.UserId
+                @if (seat.UserId == Table.HostUserId)
+                {
+                    <span class="badge text-bg-info">host</span>
+                }
+                @if (seat.UserId == UserId)
+                {
+                    <span class="badge text-bg-secondary">you</span>
+                }
+            </li>
+        }
+        @if (Table.Seats.Count == 0)
+        {
+            <li class="text-body-secondary">Nobody yet.</li>
+        }
+    </ul>
+
+    @if (Table.ThreadId is { } thread)
+    {
+        <div class="mt-2"><a href="https://discord.com/channels/@GuildId/@thread" target="_blank" rel="noopener">Open the table's thread in Discord ↗</a></div>
+    }
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger py-2 mt-2 mb-0">@error</div>
+    }
+
+    @if (Table.Status == TableStatus.Open)
+    {
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            @if (Seated)
+            {
+                <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="LeaveAsync">Leave table</button>
+            }
+            else
+            {
+                <button class="btn btn-primary btn-sm" disabled="@(busy || Full)" @onclick="JoinAsync">@(Full ? "Table full" : "Sit down")</button>
+            }
+        </div>
+
+        @if (CanOrganise)
+        {
+            <hr class="my-2" />
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-3">
+                    <label class="form-label meta-mono mb-1" for="size-@Table.Id">Seats</label>
+                    <input id="size-@Table.Id" class="form-control form-control-sm" type="number" min="@GameRules.AbsoluteMinSize" max="@GameRules.AbsoluteMaxSize" @bind="size" />
+                </div>
+                <div class="col-6 col-md-5">
+                    <label class="form-label meta-mono mb-1" for="host-@Table.Id">Host</label>
+                    <select id="host-@Table.Id" class="form-select form-select-sm" @bind="host">
+                        <option value="">(none)</option>
+                        @foreach (var seat in Table.Seats)
+                        {
+                            <option value="@seat.UserId">user @seat.UserId</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="SaveAsync">Save</button>
+                    <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="CancelAsync">Cancel table</button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TableDto Table { get; set; } = default!;
+
+    [Parameter, EditorRequired] public long GuildId { get; set; }
+
+    /// <summary>The signed-in user's Discord id.</summary>
+    [Parameter] public long UserId { get; set; }
+
+    /// <summary>Whether the viewer is an organiser or above (controls only; the API enforces it).</summary>
+    [Parameter] public bool CanOrganise { get; set; }
+
+    /// <summary>Whether the title links to the table's own page (off on that page).</summary>
+    [Parameter] public bool LinkToPage { get; set; } = true;
+
+    /// <summary>Raised with the table after any change, so the parent can show it.</summary>
+    [Parameter] public EventCallback<TableDto> OnChanged { get; set; }
+
+    private bool busy;
+    private string? error;
+    private int size;
+    private string host = "";
+
+    private bool Seated => Table.Seats.Any(s => s.UserId == UserId);
+
+    private bool Full => Table.Seats.Count >= Table.Size;
+
+    protected override void OnParametersSet()
+    {
+        size = Table.Size;
+        host = Table.HostUserId?.ToString() ?? "";
+    }
+
+    private GameNightsWebApiClient? Client => Services.GetService(typeof(GameNightsWebApiClient)) as GameNightsWebApiClient;
+
+    private Task JoinAsync() => RunAsync(c => c.SeatAsync(GuildId, Table.Id, UserId));
+
+    private Task LeaveAsync() => RunAsync(c => c.UnseatAsync(GuildId, Table.Id, UserId));
+
+    private Task CancelAsync() => RunAsync(c => c.CancelTableAsync(GuildId, Table.Id));
+
+    private Task SaveAsync() => RunAsync(c => c.UpdateTableAsync(GuildId, Table.Id, new UpdateTableRequest(
+        Size: size == Table.Size ? null : size,
+        HostUserId: long.TryParse(host, out var id) && id != Table.HostUserId ? id : null,
+        ClearHost: host == "" && Table.HostUserId is not null)));
+
+    private async Task RunAsync(Func<GameNightsWebApiClient, Task<CalCrony.Web.Api.ApiResult<TableDto>>> action)
+    {
+        if (Client is not { } client)
+        {
+            return;
+        }
+
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await action(client);
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            await OnChanged.InvokeAsync(result.Value!);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

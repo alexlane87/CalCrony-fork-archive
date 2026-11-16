@@ -26,6 +26,7 @@ public static class GameNightsBotExtensions
             http.DefaultRequestHeaders.Add("X-Api-Key", config["Api:ApiKey"] ?? "");
         });
         services.AddSingleton<BotTier>();
+        services.AddSingleton<IExtensionDeliveryHandler, TableDeliveryHandler>();
         return services;
     }
 }

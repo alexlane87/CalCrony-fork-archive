@@ -131,7 +131,7 @@ Tests: seed is idempotent; validator accepts a complete Root and Arcs submission
 
 Done when: GET games returns Root and Arcs with the right fields and required flags.
 
-### [ ] Step 4: Tables
+### [x] Step 4: Tables
 
 Goal: tables on events, each with a Discord thread.
 

@@ -19,6 +19,7 @@ namespace CalCrony.Bot;
 /// <param name="roles">The attendee-role manager.</param>
 /// <param name="threads">The event-thread manager.</param>
 /// <param name="liveLists">The live-list manager.</param>
+/// <param name="extensions">Handlers for extension-owned delivery types (Game Nights); asked before the built-in dispatch gives up.</param>
 public sealed class DeliveryPollerService(
     DiscordSocketClient client,
     CalCronyApiClient api,
@@ -27,7 +28,8 @@ public sealed class DeliveryPollerService(
     NativeEventMirror mirror,
     AttendeeRoleManager roles,
     EventThreadManager threads,
-    LiveListManager liveLists) : BackgroundService
+    LiveListManager liveLists,
+    IEnumerable<CalCrony.Bot.GameNights.IExtensionDeliveryHandler> extensions) : BackgroundService
 {
     /// <summary>Polls the outbox (~15s), posts each due delivery to Discord, and acks only after success.</summary>
     /// <param name="stoppingToken">Signals host shutdown.</param>
@@ -221,6 +223,15 @@ public sealed class DeliveryPollerService(
             }
 
             return true;
+        }
+
+        // Fork: deliveries owned by the Game Nights extension.
+        foreach (var extension in extensions)
+        {
+            if (extension.Handles(delivery.Type))
+            {
+                return await extension.HandleAsync(delivery);
+            }
         }
 
         if (await client.GetChannelAsync((ulong)delivery.ChannelId) is not IMessageChannel channel)

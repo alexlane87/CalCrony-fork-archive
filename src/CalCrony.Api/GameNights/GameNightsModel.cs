@@ -82,6 +82,28 @@ public static class GameNightsModel
             e.HasKey(l => new { l.GameId, l.TypeRoleId });
         });
 
+        modelBuilder.Entity<GameNightTable>(e =>
+        {
+            e.Property(t => t.Id).ValueGeneratedNever();
+            e.HasOne<Event>().WithMany().HasForeignKey(t => t.EventId).OnDelete(DeleteBehavior.Cascade);
+            // A game with tables is retired, never deleted.
+            e.HasOne<GameNightGame>().WithMany().HasForeignKey(t => t.GameId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(t => new { t.EventId, t.Number }).IsUnique();
+            e.HasIndex(t => t.GameId);
+            e.HasMany(t => t.Seats).WithOne().HasForeignKey(s => s.TableId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GameNightTableSeat>(e =>
+        {
+            e.Property(s => s.Id).ValueGeneratedNever();
+            // Exactly one of a member or a guest. Guests (and their table) arrive with result reporting;
+            // the column exists now so that step does not have to rewrite this table.
+            e.ToTable(t => t.HasCheckConstraint("CK_GameNightTableSeats_OneOccupant", "(\"UserId\" IS NULL) <> (\"GuestId\" IS NULL)"));
+            e.HasIndex(s => new { s.TableId, s.UserId }).IsUnique();
+            e.HasIndex(s => new { s.TableId, s.GuestId }).IsUnique();
+            e.HasIndex(s => s.UserId);
+        });
+
         modelBuilder.Entity<GameNightInvite>(e =>
         {
             e.HasKey(i => new { i.Scope, i.ScopeId, i.UserId });
