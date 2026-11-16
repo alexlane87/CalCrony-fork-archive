@@ -74,7 +74,7 @@ TI4 is phase 3; do not add fields for it now.
 
 Tick each box when done. Do not start a step until the previous one is ticked.
 
-### [ ] Step 0: Fork, recon and a green baseline
+### [x] Step 0: Fork, recon and a green baseline
 
 Goal: a working fork you understand, with the unknowns answered.
 
