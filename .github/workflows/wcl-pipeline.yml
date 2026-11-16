@@ -1,0 +1,169 @@
+# Fork pipeline (not in upstream; a separate file so upstream syncs never conflict with it).
+#
+#   PR to dev or prod   -> build + test (required checks: build-test, pr-source)
+#   push to dev         -> build + test -> arm64 images -> move the :dev tag  -> Pi test stack deploys
+#   push to prod        -> build + test -> arm64 images -> move the :prod tag -> Pi prod stack deploys
+#
+# Deployment is pull-based: the Pi polls GHCR for the :dev / :prod tags (alex-pi-1 repo,
+# stack/calcrony/deploy.sh). This workflow holds no deploy secrets and never reaches into the
+# home network, which matters because the repo is public.
+#
+# Images are pushed under their version tag first; the moving tag is only updated by the final
+# job once all three images exist, so the Pi never sees a half-published set.
+name: wcl-pipeline
+
+on:
+  pull_request:
+    branches: [dev, prod]
+  push:
+    branches: [dev, prod]
+  # Re-run a publish by hand: gh workflow run wcl-pipeline.yml --ref dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wcl-pipeline-${{ github.event_name }}-${{ github.ref }}
+  # Superseded PR runs are cancelled; publishes are queued so tags never move backwards.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # prod only takes changes that have been through dev (and therefore the test stack).
+  pr-source:
+    name: pr-source
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: prod only accepts PRs from dev
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          if [ "$BASE" = "prod" ] && { [ "$HEAD" != "dev" ] || [ "$SAME_REPO" != "true" ]; }; then
+            echo "::error::PRs into prod must come from this repo's dev branch (got '$HEAD')."
+            exit 1
+          fi
+          echo "ok: $HEAD -> $BASE"
+
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore CalCrony.slnx
+
+      - name: Build
+        run: dotnet build CalCrony.slnx --no-restore -c Release
+
+      # Integration tests use Testcontainers; the ubuntu runner provides Docker.
+      - name: Test
+        run: dotnet test CalCrony.slnx --no-build -c Release --logger "console;verbosity=normal"
+
+  version:
+    name: version
+    if: github.event_name != 'pull_request' && (github.ref_name == 'dev' || github.ref_name == 'prod')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need upstream's release tags for git describe
+
+      # <upstream release>-dev.<run> on dev, <upstream release>-wcl.<run> on prod.
+      - id: v
+        env:
+          CHANNEL: ${{ github.ref_name }}
+          RUN: ${{ github.run_number }}
+        run: |
+          base="$(git describe --tags --abbrev=0 --match 'v[0-9]*' | sed 's/^v//')"
+          suffix="dev"; [ "$CHANNEL" = "prod" ] && suffix="wcl"
+          echo "version=${base}-${suffix}.${RUN}" >> "$GITHUB_OUTPUT"
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "### ${base}-${suffix}.${RUN} -> :${CHANNEL}" >> "$GITHUB_STEP_SUMMARY"
+
+  images:
+    name: image-${{ matrix.name }}
+    needs: [build-test, version]
+    # Native arm64 runner (free for public repos): no QEMU emulation of the .NET build.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { name: api, dockerfile: src/CalCrony.Api/Dockerfile }
+          - { name: bot, dockerfile: src/CalCrony.Bot/Dockerfile }
+          - { name: web, dockerfile: src/CalCrony.Web/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase image owner
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          push: true
+          # A plain image manifest (no attestation index) so the Pi can read the labels below.
+          provenance: false
+          build-args: VERSION=${{ needs.version.outputs.version }}
+          tags: ghcr.io/${{ env.OWNER }}/calcrony-${{ matrix.name }}:${{ needs.version.outputs.version }}
+          # The Pi's deploy script reads revision + version to check the three images belong
+          # together and to say what it is deploying.
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # Moving :dev / :prod is what triggers a deployment on the Pi.
+  publish:
+    name: publish
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move the channel tag
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          for name in api bot web; do
+            docker buildx imagetools create \
+              -t "ghcr.io/${OWNER}/calcrony-${name}:${CHANNEL}" \
+              "ghcr.io/${OWNER}/calcrony-${name}:${VERSION}"
+          done
+          echo "Published ${VERSION} as :${CHANNEL}" >> "$GITHUB_STEP_SUMMARY"
