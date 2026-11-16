@@ -61,7 +61,7 @@ Keep this list short: every entry is a potential merge conflict on upstream sync
 - `.github/workflows/wcl-pipeline.yml` and this file.
 - **West Country Leaders theme** (`wcl`): a sixth interface theme using the community website's
   palette, Quicksand font and wooden-plank header. It is the default for new users and devices
-  (upstream's default is `slate`, dark face; ours is `wcl`, light face). Touches `InterfaceThemes.cs`,
+  (upstream's default is `slate`, dark face; ours is `wcl`, auto face following the device). Touches `InterfaceThemes.cs`,
   `theme-init.js`, `site.js`, `index.html`, `theme.css`, `fonts.css`, `NavMenu.razor`,
   `ThemeToggle.razor`, `InterfaceThemePicker.razor` and the font file
   `wwwroot/fonts/quicksand-latin-400-700.woff2`. The theme list lives in both C# and JS, so keep

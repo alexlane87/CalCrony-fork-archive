@@ -14,7 +14,7 @@
     cc.getTheme = function () {
         var mode;
         try { mode = localStorage.getItem("calcrony-theme"); } catch { mode = null; }
-        return cc.modes.indexOf(mode) >= 0 ? mode : "light";
+        return cc.modes.indexOf(mode) >= 0 ? mode : "auto";
     };
 
     cc.setTheme = function (theme) {

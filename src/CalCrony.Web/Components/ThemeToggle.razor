@@ -10,9 +10,9 @@
 </div>
 
 @code {
-    // Fork default (West Country Leaders): the light face, matching the community website.
+    // Fork default (West Country Leaders): auto, following the device's light/dark setting.
     // Upstream's default is dark. Keep in step with theme-init.js and site.js.
-    private string current = "light";
+    private string current = "auto";
 
     private DotNetObjectReference<ThemeToggle>? selfRef;
 
