@@ -146,7 +146,7 @@ Tests: size limits, host optional, seating the same user twice is rejected, thre
 
 Done when: an organiser creates a Root table of 4 for an event and the thread appears with the right people.
 
-### [ ] Step 5: Add-game and role flows (Discord and web)
+### [x] Step 5: Add-game and role flows (Discord and web)
 
 Goal: the interactive way to add games, with role attach or create.
 

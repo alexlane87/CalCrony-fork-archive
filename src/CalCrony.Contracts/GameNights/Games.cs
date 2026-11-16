@@ -78,7 +78,9 @@ public record GameSpec(
 /// <param name="Id">The game id.</param>
 /// <param name="Active">False once retired: it cannot be chosen for new tables.</param>
 /// <param name="Spec">The game's definition.</param>
-public record GameDto(Guid Id, bool Active, GameSpec Spec);
+/// <param name="RoleState">Where the game's follow role is: nothing pending, being created, or failed.</param>
+/// <param name="RoleNote">Why the role could not be created or granted, in words an admin can act on.</param>
+public record GameDto(Guid Id, bool Active, GameSpec Spec, GameRoleState RoleState = GameRoleState.None, string? RoleNote = null);
 
 /// <summary>A Discord role an admin has marked as a game type (for example "Board games").</summary>
 /// <param name="RoleId">The Discord role id.</param>

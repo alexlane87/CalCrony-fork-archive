@@ -405,3 +405,57 @@ constructor parameter and one dispatch loop), `Web/Pages/App/EventDetail.razor` 
 generated migration + snapshot.
 
 **Verification.** Local: solution builds; Bot 452 and Web 178 tests pass. The Api table tests need Docker and run in CI.
+
+---
+
+# Step 5: add-game and role flows
+
+**What landed.** Migration `GameNightsGameRoles` (additive): `RoleState` and `RoleNote` on `GameNightGames`.
+Two core delivery types (`CreateGameRole = 19`, `GameRoleFollow = 20`) handled through the Step 4 poller seam.
+
+**A game's follow role.** A game has an optional Discord role (`RoleId`). Three ways to get one, all ending with the
+same thing: the role id on the game and the role watched. (1) *Attach an existing role* (Discord role picker; web: paste
+the role id). (2) *Create one in Discord* (the `/game add` wizard makes it itself). (3) *Create one from the website*:
+the API marks the game `RoleState = Pending` and queues one `CreateGameRole`; the bot makes the role and reports back
+(`PUT .../role-status`, bot only), which sets the role id or records a failure note. The note is shown on the website
+("⚠️ I can't create roles here: my role needs Manage Roles"), and asking again clears it and retries.
+Game roles and game-type roles join the watched set (`RoleWatchList`), so members' roles are snapshotted and the web
+can show who follows what. A role can belong to only one game (409).
+
+**Permission checks (the plan's warning requirement).** `GameRoleChecks` (pure): creating a role needs Manage Roles;
+giving a role needs Manage Roles AND the bot's highest role above it, and never an integration-managed role or
+@everyone. Each refusal names the fix ("drag my role above it in Server Settings → Roles"). The Discord wizard shows
+the create warning at the role step and, if a pick is refused, says why and stays on the step instead of failing. The
+website states what the bot needs before the role choice, and surfaces whatever the bot later reports. A Discord refusal
+(403) is treated as a final answer, never retried. The bot also records a failure note when it cannot grant a role
+to a follower, and clears it the next time a grant works.
+
+**Following.** `POST games/{id}/follow` (member, for themselves) queues `GameRoleFollow`; the bot gives or takes the role
+(same checks). `GET games/following` answers from the role snapshot, with the same fail-closed rule as signup
+restrictions: if the snapshot is stale or a game role has not been checked yet it answers `Known = false` and the page
+says it can't tell, rather than claiming "you don't follow". In Discord: `/game follow` and a public Follow button
+(`/game panel`, or "Post a Follow button here" at the end of the wizard); both toggle the caller's role directly.
+
+**Game types.** `/game type-add role label` and `/game type-remove role` (admins) and a "Game types" section on the
+website (admins add by role id). They use the Step 3 `game-types` routes.
+
+**Discord wizard.** `/game add` opens a form (name, fewest, most, usual table), then three steps with select menus: how a
+result is recorded, the starting questions (players only / players and final scores), and the role (role-select menu to
+attach, a "Create a ... role" button, or "No role"). Choices live in a short-lived in-memory draft keyed by a guid in
+the component ids (15 minutes; only the person who started it can continue). The organiser check runs when the form is
+submitted, because a modal must be the first response. The key is made from the name and kept unique
+(`GameWizard.KeyFromName`). The result-type and template steps are two selects, and the template is deliberately small;
+more questions are added on the game afterwards. Shared rules (`GameWizard.Build`) mean Discord and the website build the
+same definition.
+
+**Web.** A Games tab (the tabs component is now `GameNightsTabs`, showing Venues and Games when the feature is on),
+a `/app/guilds/{id}/games` page: every member sees the library with a Follow button per game that has a role;
+organisers add (four-step wizard), retire, create or attach a role; admins also apply the standard games file and manage
+game types. The web cannot list a server's roles, so attaching is by pasted role id (the wizard says how to copy one).
+
+**Verification.** Local: solution builds; Bot 476 and Web 189 tests pass. The Api tests (roles, follow, watched set) need
+Docker and run in CI. **Not exercised against real Discord:** the role-select menu binding (`IRole[]`), role creation and
+the hierarchy checks need a live server; try `/game add` once on the test server.
+
+**Core touch points added this step.** `Contracts/Deliveries.cs` (two enum values), `Api/Services/RoleWatchList.cs`
+(game and type roles), `Web/Components/GuildTabs.razor` (the tab component renamed), and the generated migration + snapshot.

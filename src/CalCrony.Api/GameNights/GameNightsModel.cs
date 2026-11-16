@@ -11,6 +11,9 @@ public static class GameNightsModel
     /// <summary>Longest game-type label.</summary>
     public const int GameTypeLabelLength = 60;
 
+    /// <summary>Longest note about a game's role.</summary>
+    public const int RoleNoteLength = 300;
+
     /// <summary>Configures the Game Nights entities.</summary>
     /// <param name="modelBuilder">The EF model builder.</param>
     public static void Apply(ModelBuilder modelBuilder)
@@ -56,6 +59,7 @@ public static class GameNightsModel
             // Ids are assigned in code. Telling EF so matters for the fields collection: a new field added to
             // an already-tracked game with a Guid already set would otherwise be taken for an existing row.
             e.Property(g => g.Id).ValueGeneratedNever();
+            e.Property(g => g.RoleNote).HasMaxLength(RoleNoteLength);
             e.Property(g => g.Key).HasMaxLength(GameRules.KeyLength);
             e.Property(g => g.Name).HasMaxLength(GameRules.NameLength);
             e.HasIndex(g => new { g.GuildId, g.Key }).IsUnique();

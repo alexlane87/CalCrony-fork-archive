@@ -1134,6 +1134,13 @@ namespace CalCrony.Api.Data.Migrations
                     b.Property<long?>("RoleId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("RoleNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("RoleState")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("SeedVersion")
                         .HasColumnType("integer");
 

@@ -89,6 +89,26 @@ public static class RoleWatchList
             Add(watched, tier.GuildId, [tier.RoleId]);
         }
 
+        // Fork (Game Nights): a game's follow role (so the web can show who follows what) and the roles an
+        // admin marked as game types (so interest by type can be read) are watched too.
+        var fromGames = await db.GameNightGames
+            .Where(g => g.Active && g.RoleId != null && (guildId == null || g.GuildId == guildId))
+            .Select(g => new { g.GuildId, RoleId = g.RoleId!.Value })
+            .ToListAsync(cancellationToken);
+        foreach (var game in fromGames)
+        {
+            Add(watched, game.GuildId, [game.RoleId]);
+        }
+
+        var fromTypes = await db.GameNightGameTypes
+            .Where(t => guildId == null || t.GuildId == guildId)
+            .Select(t => new { t.GuildId, t.RoleId })
+            .ToListAsync(cancellationToken);
+        foreach (var type in fromTypes)
+        {
+            Add(watched, type.GuildId, [type.RoleId]);
+        }
+
         return watched;
     }
 
