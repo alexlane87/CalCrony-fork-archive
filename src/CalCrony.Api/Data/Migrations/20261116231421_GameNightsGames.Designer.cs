@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CalCrony.Api.Data.Migrations
 {
     [DbContext(typeof(CalCronyDbContext))]
-    [Migration("20261116230848_GameNightsGames")]
+    [Migration("20261116231421_GameNightsGames")]
     partial class GameNightsGames
     {
         /// <inheritdoc />
@@ -1092,7 +1092,6 @@ namespace CalCrony.Api.Data.Migrations
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGame", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<bool>("Active")
@@ -1152,7 +1151,6 @@ namespace CalCrony.Api.Data.Migrations
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameField", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("GameId")

@@ -186,8 +186,6 @@ public class GameNightsGameApiTests(GameNightsFixture fixture) : IClassFixture<G
     public async Task A_newer_file_version_refreshes_an_untouched_game_but_never_one_edited_by_hand()
     {
         var a = await ArrangeAsync();
-        await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var seeder = scope.ServiceProvider.GetRequiredService<GameSeeder>();
 
         SeedFile File(int version, string name) => GameSeedFile.Parse($$"""
             { "games": [ { "version": {{version}}, "key": "go", "name": "{{name}}", "resultType": "SingleWinner",
@@ -195,16 +193,16 @@ public class GameNightsGameApiTests(GameNightsFixture fixture) : IClassFixture<G
               "fields": [ { "key": "players", "label": "Players", "kind": "Player", "scope": "Table", "required": true } ] } ] }
             """);
 
-        Assert.Equal(new SeedGamesResponse(1, 0, 0), await seeder.ApplyAsync(a.Guild, File(1, "Go"), default));
-        Assert.Equal(new SeedGamesResponse(0, 0, 1), await seeder.ApplyAsync(a.Guild, File(1, "Go"), default));
-        Assert.Equal(new SeedGamesResponse(0, 1, 0), await seeder.ApplyAsync(a.Guild, File(2, "Go (new)"), default));
+        Assert.Equal(new SeedGamesResponse(1, 0, 0), await ApplySeedAsync(a.Guild, File(1, "Go")));
+        Assert.Equal(new SeedGamesResponse(0, 0, 1), await ApplySeedAsync(a.Guild, File(1, "Go")));
+        Assert.Equal(new SeedGamesResponse(0, 1, 0), await ApplySeedAsync(a.Guild, File(2, "Go (new)")));
         Assert.Equal("Go (new)", Assert.Single(await ListAsync(a, a.Member)).Spec.Name);
 
         // Someone edits it by hand; a later file version must not overwrite that.
         var game = Assert.Single(await ListAsync(a, a.Member));
         (await a.Admin.PutAsJsonAsync($"/guilds/{a.Guild}/game-nights/games/{game.Id}", game.Spec with { Name = "Weiqi" }))
             .EnsureSuccessStatusCode();
-        Assert.Equal(new SeedGamesResponse(0, 0, 1), await seeder.ApplyAsync(a.Guild, File(3, "Go (newest)"), default));
+        Assert.Equal(new SeedGamesResponse(0, 0, 1), await ApplySeedAsync(a.Guild, File(3, "Go (newest)")));
         Assert.Equal("Weiqi", Assert.Single(await ListAsync(a, a.Member)).Spec.Name);
     }
 
@@ -213,25 +211,31 @@ public class GameNightsGameApiTests(GameNightsFixture fixture) : IClassFixture<G
     {
         var a = await ArrangeAsync();
         await a.Admin.PutAsJsonAsync($"/guilds/{a.Guild}/game-nights/game-types", new PutGameTypesRequest([new(9001, "Board games")]));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var seeder = scope.ServiceProvider.GetRequiredService<GameSeeder>();
         string Json(int version) => $$"""
             { "games": [ { "version": {{version}}, "key": "go", "name": "Go", "resultType": "SingleWinner",
               "minSize": 2, "maxSize": 2, "defaultSize": 2, "ratingEnabled": false, "ratingK": 32, "startRating": 1000,
               "fields": [ { "key": "players", "label": "Players", "kind": "Player", "scope": "Table", "required": true } ] } ] }
             """;
-        await seeder.ApplyAsync(a.Guild, GameSeedFile.Parse(Json(1)), default);
+        await ApplySeedAsync(a.Guild, GameSeedFile.Parse(Json(1)));
 
         // The links are attached through the game's own edit, which marks it as edited; so a refresh skips it.
         // The role/type survive either way, which is what this checks.
         var game = Assert.Single(await ListAsync(a, a.Member));
         (await a.Admin.PutAsJsonAsync($"/guilds/{a.Guild}/game-nights/games/{game.Id}",
             game.Spec with { RoleId = 9100, TypeRoleIds = [9001] })).EnsureSuccessStatusCode();
-        await seeder.ApplyAsync(a.Guild, GameSeedFile.Parse(Json(2)), default);
+        await ApplySeedAsync(a.Guild, GameSeedFile.Parse(Json(2)));
 
         var after = Assert.Single(await ListAsync(a, a.Member)).Spec;
         Assert.Equal(9100L, after.RoleId);
         Assert.Equal([9001L], after.TypeRoleIds);
+    }
+
+    // A fresh scope (and so a fresh DbContext) per call: a long-lived context would answer from its own
+    // tracked copies and hide edits made through the API in between.
+    private async Task<SeedGamesResponse> ApplySeedAsync(long guild, SeedFile file)
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<GameSeeder>().ApplyAsync(guild, file, default);
     }
 
     // ---- helpers ----

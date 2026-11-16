@@ -1089,7 +1089,6 @@ namespace CalCrony.Api.Data.Migrations
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGame", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<bool>("Active")
@@ -1149,7 +1148,6 @@ namespace CalCrony.Api.Data.Migrations
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameField", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("GameId")

@@ -53,6 +53,9 @@ public static class GameNightsModel
 
         modelBuilder.Entity<GameNightGame>(e =>
         {
+            // Ids are assigned in code. Telling EF so matters for the fields collection: a new field added to
+            // an already-tracked game with a Guid already set would otherwise be taken for an existing row.
+            e.Property(g => g.Id).ValueGeneratedNever();
             e.Property(g => g.Key).HasMaxLength(GameRules.KeyLength);
             e.Property(g => g.Name).HasMaxLength(GameRules.NameLength);
             e.HasIndex(g => new { g.GuildId, g.Key }).IsUnique();
@@ -62,6 +65,7 @@ public static class GameNightsModel
 
         modelBuilder.Entity<GameNightGameField>(e =>
         {
+            e.Property(f => f.Id).ValueGeneratedNever();
             e.Property(f => f.Key).HasMaxLength(GameRules.KeyLength);
             e.Property(f => f.Label).HasMaxLength(GameRules.LabelLength);
             e.HasIndex(f => new { f.GameId, f.Key }).IsUnique();
