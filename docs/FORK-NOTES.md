@@ -305,3 +305,47 @@ registration), `Web/Components/GuildTabs.razor` (one `<VenuesTab>`), `Web/Pages/
 
 **Verification.** Local: Bot 438 and Web 169 tests pass; the solution builds. The Api venue tests need Docker (not
 running locally), so they run in CI.
+
+---
+
+# Step 3: game library (data and config)
+
+**What landed.** Migration `GameNightsGames` (additive, four tables): `GameNightGames`, `GameNightGameFields`,
+`GameNightGameTypes`, `GameNightGameTypeLinks`. Games are per server (unique on server + key), retired never deleted.
+
+**One shape everywhere.** `GameSpec` (Contracts) is the whole definition: key, name, result type (ranked placement,
+single winner, winning side), table size 2 to 100 with a default, rating on/off with K and start rating, an optional
+follow-role id, the game-type roles it belongs to, and its result questions (`GameFieldSpec`: key, label, kind
+player/pick-list/number/text, scope table/player, required, unique, pick-list values). The create route, the edit
+route, the config file and the validator all use it. `GameRules.Validate` checks a definition (sizes, keys, pick
+lists need 2 to 50 distinct values, one player list, "unique" only on per-player pick-lists and text).
+
+**Config file.** `GameNights/games.json` is built into the API (Root and Arcs, from section 5 of the plan) and can
+be replaced with `GameNights:GamesFile=/path/games.json`, so adding a game is editing JSON. Each game carries a
+`version`. Applying the file is idempotent: a missing game is created; an existing seeded game is refreshed only when
+the file's version is newer AND nobody has edited it by hand (`LocallyEdited`); a refresh never touches the role or
+type links an admin attached. It runs (a) at startup for the servers in `GameNights:SeedGuildIds` (comma-separated),
+after the host has started so migrations are done, and never stops the API starting if it fails; (b) on demand via
+`POST /guilds/{id}/game-nights/games/seed` (Admin).
+Starter lists: Root factions are the ten I am sure of (base, Riverfolk, Underground, Marauder, Homeland), maps
+Autumn/Winter/Lake/Mountain, decks Standard and Exiles and Partisans; Arcs colours Red/Yellow/Blue/White, leaders
+free text. Check the lists against the table's actual boxes and edit the file (or the game) as needed.
+
+**Routes** (`/guilds/{id}/game-nights/...`): `GET games` (member; `?includeRetired`), `GET games/{id}`, `POST games`,
+`PUT games/{id}` (whole definition; the key cannot change; fields are matched by key), `POST games/{id}/retire|reinstate`
+(organiser up); `POST games/seed`, `PUT game-types` (admin); `GET game-types` (member). A game may only name game
+types an admin has listed; removing a type a game still uses is refused (409).
+
+**Validator.** `ResultValidator.Validate(GameSpec, ResultSubmission)` (Contracts, pure, shared with bot and web)
+is the one Step 7 will call. Rules: player count within the game's sizes; nobody listed twice; each player is a
+member or a guest; placements follow the result type; required answers present (per player and per table);
+pick-list answers on the list; numbers whole; text at most 200 characters; "unique" questions have no repeated
+answer (two players cannot both be the Marquise or both be red); unknown question keys rejected.
+Convention for later steps: placement is a separate field on each reported player (not a question), and the score is
+the question keyed `score`.
+
+**Core touch points added this step.** `CalCrony.Api.csproj` (one embedded resource), the generated migration and
+snapshot. Everything else is in `GameNights/`.
+
+**Verification.** Local: solution builds; the pure tests (25) pass. The database-backed API tests need Docker and
+run in CI.
