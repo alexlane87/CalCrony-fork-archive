@@ -49,7 +49,7 @@ Most features work from both Discord and the web app; roles, restrictions and li
 - Role-restricted signup for events and polls (`restrict-to:@Raiders`, or `only: @role` per option); the web fails closed.
 
 **Web app & admin**
-- Sign in with Discord (identify + guilds only) and manage events, RSVPs, polls, templates, notifications and settings from a mobile-first UI with five themes.
+- Sign in with Discord (identify + guilds only) and manage events, RSVPs, polls, templates, notifications and settings from a mobile-first UI with six themes.
 - Activity log (90 days) and CSV export of every event and RSVP, for managers.
 
 ## Commands
