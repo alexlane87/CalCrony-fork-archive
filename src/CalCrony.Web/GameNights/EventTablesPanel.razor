@@ -1,0 +1,178 @@
+@* The tables section of the event page: each table as a card, and for organisers the night's default
+   table size and a form to open a table. Renders nothing unless Game Nights is on and there is something
+   to show. *@
+@using CalCrony.Contracts.GameNights
+@inject IServiceProvider Services
+
+@if (loaded && (tables.Count > 0 || canOrganise))
+{
+    <h2 class="h5 mt-4 mb-2">Tables</h2>
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger py-2">@error</div>
+    }
+
+    <div class="d-flex flex-column gap-3">
+        @foreach (var table in tables)
+        {
+            <TableCard @key="table.Id" Table="table" GuildId="GuildId" UserId="UserId" CanOrganise="canOrganise" OnChanged="ReloadAsync" />
+        }
+    </div>
+
+    @if (tables.Count == 0)
+    {
+        <p class="text-body-secondary">No tables yet.</p>
+    }
+
+    @if (canOrganise)
+    {
+        <div class="card p-3 mt-3" style="max-width:560px">
+            <h3 class="h6 mb-2">Open a table</h3>
+            @if (games.Count == 0)
+            {
+                <p class="text-body-secondary mb-0">There are no games in the library yet.</p>
+            }
+            else
+            {
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label meta-mono mb-1" for="newGame">Game</label>
+                        <select id="newGame" class="form-select form-select-sm" @bind="newGame">
+                            @foreach (var game in games)
+                            {
+                                <option value="@game.Id">@game.Spec.Name (@game.Spec.MinSize–@game.Spec.MaxSize players)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label meta-mono mb-1" for="newSize">Seats</label>
+                        <input id="newSize" class="form-control form-control-sm" type="number" min="@GameRules.AbsoluteMinSize" max="@GameRules.AbsoluteMaxSize" placeholder="default" @bind="newSize" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenAsync">Open table</button>
+                    </div>
+                </div>
+                <div class="row g-2 align-items-end mt-2">
+                    <div class="col-6 col-md-4">
+                        <label class="form-label meta-mono mb-1" for="nightSize">Default seats tonight</label>
+                        <input id="nightSize" class="form-control form-control-sm" type="number" min="@GameRules.AbsoluteMinSize" max="@GameRules.AbsoluteMaxSize" placeholder="per game" @bind="defaultSize" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <button class="btn btn-outline-primary btn-sm" disabled="@busy" @onclick="SaveDefaultAsync">Save default</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public long GuildId { get; set; }
+
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    /// <summary>The signed-in user's Discord id.</summary>
+    [Parameter] public long UserId { get; set; }
+
+    private GameNightsWebApiClient? client;
+    private List<TableDto> tables = [];
+    private List<GameDto> games = [];
+    private bool loaded;
+    private bool canOrganise;
+    private bool busy;
+    private string? error;
+    private string newGame = "";
+    private int? newSize;
+    private int? defaultSize;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Resolved optionally: a host that has not registered the extension simply shows nothing.
+        if (Services.GetService(typeof(GameNightsWebApiClient)) is not GameNightsWebApiClient found)
+        {
+            return;
+        }
+
+        client = found;
+        var mine = await client.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            return; // not switched on
+        }
+
+        canOrganise = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Organiser;
+        if (!await LoadTablesAsync())
+        {
+            return;
+        }
+
+        if (canOrganise)
+        {
+            games = (await client.ListGamesAsync(GuildId)).Value ?? [];
+            newGame = games.FirstOrDefault()?.Id.ToString() ?? "";
+        }
+
+        loaded = true;
+    }
+
+    private async Task<bool> LoadTablesAsync()
+    {
+        var result = await client!.ListTablesAsync(GuildId, EventId);
+        if (!result.Success)
+        {
+            return false;
+        }
+
+        tables = [.. result.Value!.Tables];
+        defaultSize = result.Value.DefaultTableSize;
+        return true;
+    }
+
+    private async Task ReloadAsync(TableDto _)
+    {
+        await LoadTablesAsync();
+    }
+
+    private async Task OpenAsync()
+    {
+        if (!Guid.TryParse(newGame, out var gameId))
+        {
+            return;
+        }
+
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await client!.CreateTableAsync(GuildId, EventId, new CreateTableRequest(gameId, newSize));
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            newSize = null;
+            await LoadTablesAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SaveDefaultAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await client!.SetTableDefaultAsync(GuildId, EventId, defaultSize);
+            error = result.Error;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

@@ -349,3 +349,59 @@ snapshot. Everything else is in `GameNights/`.
 
 **Verification.** Local: solution builds; the pure tests (25) pass. The database-backed API tests need Docker and
 run in CI.
+
+---
+
+# Step 4: tables
+
+**What landed.** Migration `GameNightsTables` (additive): `GameNightTables`, `GameNightTableSeats`, and a nullable
+`DefaultTableSize` on `GameNightEventExtensions`. A seat holds a member OR (from result reporting on) a guest;
+a check constraint makes it exactly one, so Step 7 does not have to rewrite the table. A table is numbered 1, 2, 3
+within its night (unique), keeps its history when cancelled, and has a `Visibility` (public by default; the filter
+treats a non-public table as not found unless you are seated, invited, or your tier reaches it).
+
+**Rules.** Size = the request's, else the night's default (pulled into the game's range), else the game's default;
+always inside the game's range and never above 100. A table can't shrink below its seated count. A host is optional,
+must be seated, and standing up gives hosting up. Seating the same person twice is refused (409); a full table
+turns people away (409). Members can sit and stand only themselves; organisers can seat anyone; the bot is trusted
+(it checks Discord first). Tables take seat changes only while the night is live and the table is open. A person is
+not stopped from sitting at two tables on one night (a two-game evening is normal).
+
+**Routes** (`/guilds/{id}/game-nights/...`): `GET events/{e}/tables` (member, visibility-filtered; `?includeCancelled`),
+`POST events/{e}/tables`, `PUT events/{e}/table-defaults`, `PATCH tables/{t}`, `POST tables/{t}/cancel` (organiser up),
+`GET tables/{t}`, `POST tables/{t}/seats`, `DELETE tables/{t}/seats/{user}` (member for self), `PUT tables/{t}/thread`
+(bot only).
+
+**Threads through the outbox.** Two new delivery types in the core enum: `CreateTableThread = 17` and
+`TableSeatChange = 18`. Creating a table enqueues exactly one `CreateTableThread` in the same transaction; reading or
+editing never enqueues another. The bot reads the table first and does nothing if it already has a thread, is closed
+or is gone, creates the thread on a starter message in the night's channel, records the thread id with the API
+straight away, and removes the post again if that fails, so a retry cannot leave a second thread. Then the welcome:
+the host is addressed first (the only ping in that message), then the other players are mentioned by id; each
+message pins `AllowedMentions` to exactly the people it names. Later seat changes enqueue a short note only once the
+table has a thread (the thread's own welcome lists the seats made before it). Seat notes are best-effort and always
+acknowledge; a thread deleted in Discord is forgotten (id cleared).
+**Public thread, not private:** the invite integer lacks Create Private Threads (see the top of this file). Tables
+use public threads on a starter message, which is what event threads already do. Moving to private threads is the
+invite change flagged earlier (and a re-invite on prod).
+
+**A new seam.** `IExtensionDeliveryHandler` (Bot): the poller asks each registered handler whether it owns a
+delivery type before its own dispatch gives up. Later steps (game-night signals, result reminders) reuse it.
+
+**Bot.** `/table create event game [size] [host]` (organisers, checked bot-side), `/table join table`, `/table leave
+table`, with autocompletes for games and for open tables at upcoming nights. Guarded by `RequireGameNights`.
+
+**Web.** A Tables section on the event page (a card per table; organisers also get the night's default size and an
+"Open a table" form), a table page at `/app/guilds/{id}/tables/{table}`, and a card with Sit down / Leave table, and
+for organisers seats, host (chosen from the people sitting) and Cancel table. Components resolve their client
+optionally and render nothing when the feature is off. **People show as "user {id}"**, exactly as the RSVP list does,
+until the name service arrives in Step 7.
+
+**Not done (deliberately).** Cancelling a table does not archive its thread. Choosing a host is possible on the
+website and the API; the bot's `create` takes one but there is no `/table host`. Guests can't be seated yet.
+
+**Core touch points added this step.** `Contracts/Deliveries.cs` (two enum values), `Bot/DeliveryPollerService.cs` (one
+constructor parameter and one dispatch loop), `Web/Pages/App/EventDetail.razor` (one `<EventTablesPanel>`), and the
+generated migration + snapshot.
+
+**Verification.** Local: solution builds; Bot 452 and Web 178 tests pass. The Api table tests need Docker and run in CI.

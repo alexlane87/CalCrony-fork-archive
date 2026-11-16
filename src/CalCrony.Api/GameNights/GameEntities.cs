@@ -115,3 +115,57 @@ public class GameNightGameTypeLink
     /// <summary>The game-type role id (a role listed in <see cref="GameNightGameType"/> for the same server).</summary>
     public long TypeRoleId { get; set; }
 }
+
+/// <summary>A table at a game night: one game, a number of seats, an optional host, and (once the bot has
+/// made it) a Discord thread. Cancelled, never deleted, so its history stays.</summary>
+public class GameNightTable
+{
+    /// <summary>The table id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The game night.</summary>
+    public Guid EventId { get; set; }
+
+    /// <summary>The game being played.</summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>1, 2, 3... within the night (unique per night).</summary>
+    public int Number { get; set; }
+
+    /// <summary>How many seats.</summary>
+    public int Size { get; set; }
+
+    /// <summary>The host, if any; always one of the seated members.</summary>
+    public long? HostUserId { get; set; }
+
+    /// <summary>Open, played or cancelled.</summary>
+    public TableStatus Status { get; set; } = TableStatus.Open;
+
+    /// <summary>The Discord thread, once made.</summary>
+    public long? ThreadId { get; set; }
+
+    /// <summary>Who may see the table. Public by default; a table that is not public can never carry a league.</summary>
+    public GameNightsVisibility Visibility { get; set; } = GameNightsVisibility.Public;
+
+    /// <summary>Who is sitting.</summary>
+    public List<GameNightTableSeat> Seats { get; set; } = [];
+}
+
+/// <summary>One occupied seat. Exactly one of <see cref="UserId"/> and <see cref="GuestId"/> is set.</summary>
+public class GameNightTableSeat
+{
+    /// <summary>The seat id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The table.</summary>
+    public Guid TableId { get; set; }
+
+    /// <summary>A Discord member.</summary>
+    public long? UserId { get; set; }
+
+    /// <summary>A guest (no Discord account); used from result reporting onwards.</summary>
+    public Guid? GuestId { get; set; }
+
+    /// <summary>The order people sat down in.</summary>
+    public int SeatOrder { get; set; }
+}

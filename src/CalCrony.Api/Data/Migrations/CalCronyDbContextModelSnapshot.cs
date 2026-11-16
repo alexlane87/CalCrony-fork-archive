@@ -1070,6 +1070,9 @@ namespace CalCrony.Api.Data.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("DefaultTableSize")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("LimitOverride")
                         .HasColumnType("integer");
 
@@ -1237,6 +1240,78 @@ namespace CalCrony.Api.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("GameNightInvites");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("HostUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Size")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ThreadId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Visibility")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.HasIndex("EventId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("GameNightTables");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTableSeat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("GuestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SeatOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TableId", "GuestId")
+                        .IsUnique();
+
+                    b.HasIndex("TableId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("GameNightTableSeats", t =>
+                        {
+                            t.HasCheckConstraint("CK_GameNightTableSeats_OneOccupant", "(\"UserId\" IS NULL) <> (\"GuestId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenue", b =>
@@ -1434,6 +1509,30 @@ namespace CalCrony.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTable", b =>
+                {
+                    b.HasOne("CalCrony.Api.Data.Event", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CalCrony.Api.GameNights.GameNightGame", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTableSeat", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightTable", null)
+                        .WithMany("Seats")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenueArea", b =>
                 {
                     b.HasOne("CalCrony.Api.GameNights.GameNightVenue", null)
@@ -1474,6 +1573,11 @@ namespace CalCrony.Api.Data.Migrations
                     b.Navigation("Fields");
 
                     b.Navigation("TypeLinks");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTable", b =>
+                {
+                    b.Navigation("Seats");
                 });
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenue", b =>
