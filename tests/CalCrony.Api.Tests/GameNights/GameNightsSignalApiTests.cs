@@ -171,8 +171,8 @@ public class GameNightsSignalApiTests(GameNightsFixture fixture) : IClassFixture
             (await n.Member.PutAsJsonAsync(Url(n, $"/{n.Root.Id}"), new SetSignalRequest((SignalKind)9))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await n.Member.PutAsJsonAsync(Url(n, $"/{other.Root.Id}"), new SetSignalRequest(SignalKind.CanPlay))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound,
-            (await other.Member.GetAsync(Url(n))).StatusCode); // a night in another server
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await other.Member.GetAsync(Url(n))).StatusCode); // not a member of this server
 
         (await n.Admin.PostAsync($"/guilds/{n.Guild}/game-nights/games/{n.Arcs.Id}/retire", null)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.BadRequest,
