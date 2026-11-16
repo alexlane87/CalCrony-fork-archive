@@ -30,6 +30,7 @@ builder.Services.AddHttpClient("Api", client => client.BaseAddress = new Uri(api
 builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("Api"));
 builder.Services.AddScoped<AuthApiClient>();
 builder.Services.AddScoped<CalCronyWebApiClient>();
+builder.Services.AddScoped<CalCrony.Web.GameNights.GameNightsWebApiClient>(); // fork: Game Nights extension
 
 var host = builder.Build();
 

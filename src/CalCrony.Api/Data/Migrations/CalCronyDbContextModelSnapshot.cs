@@ -1050,15 +1050,38 @@ namespace CalCrony.Api.Data.Migrations
                     b.ToTable("WebRefreshTokens");
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightEventArea", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AreaId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("EventId", "AreaId");
+
+                    b.HasIndex("AreaId");
+
+                    b.ToTable("GameNightEventAreas");
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightEventExtension", b =>
                 {
                     b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("LimitOverride")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("VenueId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Visibility")
                         .HasColumnType("integer");
 
                     b.HasKey("EventId");
+
+                    b.HasIndex("VenueId");
 
                     b.ToTable("GameNightEventExtensions");
                 });
@@ -1079,6 +1102,65 @@ namespace CalCrony.Api.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("GameNightInvites");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("DefaultLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId");
+
+                    b.ToTable("GameNightVenues");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenueArea", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ExtraCapacity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VenueId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("GameNightVenueAreas");
                 });
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightsTierRole", b =>
@@ -1170,11 +1252,40 @@ namespace CalCrony.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightEventArea", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightVenueArea", null)
+                        .WithMany()
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CalCrony.Api.GameNights.GameNightEventExtension", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightEventExtension", b =>
                 {
                     b.HasOne("CalCrony.Api.Data.Event", null)
                         .WithOne()
                         .HasForeignKey("CalCrony.Api.GameNights.GameNightEventExtension", "EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CalCrony.Api.GameNights.GameNightVenue", null)
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenueArea", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightVenue", null)
+                        .WithMany("Areas")
+                        .HasForeignKey("VenueId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -1203,6 +1314,11 @@ namespace CalCrony.Api.Data.Migrations
                     b.Navigation("Options");
 
                     b.Navigation("Votes");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenue", b =>
+                {
+                    b.Navigation("Areas");
                 });
 #pragma warning restore 612, 618
         }

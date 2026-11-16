@@ -1,0 +1,188 @@
+@* The venue section of the event page: where the event is, the attendee limit and where that
+   limit came from, and (for organisers) the controls to pick a venue, override the limit and open
+   or close the venue's extra areas. Renders nothing unless Game Nights is on and there is
+   something to show; the API enforces who may change what. *@
+@using CalCrony.Contracts.GameNights
+@inject IServiceProvider Services
+
+@if (settings is not null && (settings.Venue is not null || canEdit))
+{
+    <h2 class="h5 mt-4 mb-2">Venue</h2>
+    <div class="card p-3" style="max-width:560px">
+        @if (error is not null)
+        {
+            <div class="alert alert-danger py-2">@error</div>
+        }
+
+        @if (settings.Venue is { } venue)
+        {
+            <div><span class="fw-semibold">📍 @venue.Name</span>@(string.IsNullOrWhiteSpace(venue.Address) ? "" : $", {venue.Address}")</div>
+        }
+        else
+        {
+            <div class="text-body-secondary">No venue yet.</div>
+        }
+
+        <div class="meta-mono mt-1" data-testid="limit">
+            @if (settings.Effective.Limit is int limit)
+            {
+                <span>Attendee limit: @limit</span>
+            }
+            else
+            {
+                <span>No attendee limit set by a venue</span>
+            }
+            @if (settings.Effective.Explanation is { } why)
+            {
+                <span> — @why</span>
+            }
+        </div>
+
+        @if (canEdit)
+        {
+            <hr />
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-6">
+                    <label class="form-label meta-mono mb-1" for="venuePick">Venue</label>
+                    <select id="venuePick" class="form-select form-select-sm" @bind="chosenVenue" @bind:after="OnVenueChosen">
+                        <option value="">(none)</option>
+                        @foreach (var v in venues)
+                        {
+                            <option value="@v.Id">@v.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-8 col-md-4">
+                    <label class="form-label meta-mono mb-1" for="limitOverride">Limit for this event</label>
+                    <input id="limitOverride" class="form-control form-control-sm" type="number" min="1" max="@VenueLimits.MaxAttendeeLimit" placeholder="use venue" @bind="limitOverride" />
+                </div>
+            </div>
+
+            @if (ChosenVenue is { } chosen && chosen.Areas.Any(a => a.Active))
+            {
+                <div class="mt-2">
+                    <div class="meta-mono mb-1">Extra areas</div>
+                    @foreach (var area in chosen.Areas.Where(a => a.Active))
+                    {
+                        <div class="form-check" @key="area.Id">
+                            <input class="form-check-input" type="checkbox" id="area-@area.Id"
+                                   checked="@areasOn.Contains(area.Id)"
+                                   @onchange="e => ToggleArea(area.Id, e.Value is true)" />
+                            <label class="form-check-label" for="area-@area.Id">@area.Name <span class="meta-mono">+@area.ExtraCapacity</span></label>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="SaveAsync">Save venue</button>
+                <span class="meta-mono ms-2">Changing the limit seats anyone on the waitlist.</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public long GuildId { get; set; }
+
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    /// <summary>Raised after a save, so the page can reload the event (its attendee limit changed).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private EventVenueDto? settings;
+    private List<VenueDto> venues = [];
+    private bool canEdit;
+    private bool busy;
+    private string? error;
+    private string chosenVenue = "";
+    private int? limitOverride;
+    private HashSet<Guid> areasOn = [];
+
+    private VenueDto? ChosenVenue =>
+        Guid.TryParse(chosenVenue, out var id) ? venues.FirstOrDefault(v => v.Id == id) : null;
+
+    private GameNightsWebApiClient GameNights = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Resolved optionally: a host that has not registered the extension simply shows nothing.
+        if (Services.GetService(typeof(GameNightsWebApiClient)) is not GameNightsWebApiClient client)
+        {
+            return;
+        }
+
+        GameNights = client;
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            return; // not switched on (or not reachable): show nothing
+        }
+
+        canEdit = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Organiser;
+        var result = await GameNights.GetEventVenueAsync(GuildId, EventId);
+        if (!result.Success)
+        {
+            return;
+        }
+
+        if (canEdit)
+        {
+            var all = await GameNights.ListVenuesAsync(GuildId);
+            venues = all.Value ?? [];
+            // A venue already attached may since have been retired; keep it selectable.
+            if (result.Value?.Venue is { } attached && venues.All(v => v.Id != attached.Id))
+            {
+                venues.Add(attached);
+            }
+        }
+
+        Apply(result.Value!);
+    }
+
+    private void Apply(EventVenueDto value)
+    {
+        settings = value;
+        chosenVenue = value.Venue?.Id.ToString() ?? "";
+        limitOverride = value.LimitOverride;
+        areasOn = [.. value.AreaIdsOn];
+    }
+
+    private void OnVenueChosen() => areasOn.Clear(); // areas belong to one venue
+
+    private void ToggleArea(Guid id, bool on)
+    {
+        if (on)
+        {
+            areasOn.Add(id);
+        }
+        else
+        {
+            areasOn.Remove(id);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var venueId = Guid.TryParse(chosenVenue, out var id) ? id : (Guid?)null;
+            var result = await GameNights.SetEventVenueAsync(
+                GuildId, EventId, new SetEventVenueRequest(venueId, limitOverride, venueId is null ? [] : [.. areasOn]));
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            Apply(result.Value!);
+            await OnChanged.InvokeAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

@@ -255,3 +255,53 @@ role ids. Until the bot's next reconcile (every 10 minutes) checks the new roles
 **Verification.** Local .NET 10 SDK installed in `C:\Users\alexp\dotnet10-sdk` (user folder, not on PATH); the
 solution builds. Pure-rule tests pass locally; the database-backed tests need Docker, which was not running,
 so they run in CI.
+
+---
+
+# Step 2: venues
+
+**What landed.** Migration `GameNightsVenues` (additive): `GameNightVenues`, `GameNightVenueAreas`,
+`GameNightEventAreas`, plus `VenueId` and `LimitOverride` columns on `GameNightEventExtensions`.
+
+**Rule.** Effective limit = the event's override if set; otherwise the venue's default plus the capacity of
+the areas switched on for that event; a venue with no default means no limit; no venue and no override means the
+event's own limit is left alone (`VenueLimitRules`, shared in Contracts). Retired areas stop counting.
+
+**Applying it.** `EventLimits.ApplyAsync` sets the attending option's `Capacity` the way the event edit does:
+takes the same event-row lock, refuses a limit below the seats already taken (409 with the core wording),
+calls `RsvpPolicy.PromoteAsync` so the waitlist is seated, queues the Discord re-render and the live-list sync.
+It does **not** skip bot callers (unlike the core embed-sync helper), because the bot's venue buttons change data
+the bot has not rendered itself. Editing a venue's default or an area's capacity/retirement re-applies to every
+live event using that venue with no override; if any would unseat someone the whole edit is refused (409).
+
+**Where the venue shows.** Attaching a venue writes `Event.Location` (`Name, Address`), so the Discord post,
+the web page and the calendar feed show it with no change to those surfaces; the limit already shows in the
+existing "going" count. Detaching leaves the location and the limit as they were.
+
+**Routes** (`/guilds/{id}/game-nights/...`): `GET venues` (member; `?includeRetired`), `POST venues`,
+`PATCH|DELETE venues/{v}`, `POST venues/{v}/areas`, `PATCH|DELETE venues/{v}/areas/{a}` (organiser up),
+`GET events/{e}/venue` (member, visibility-filtered: hidden = 404), `PUT events/{e}/venue` (organiser up; venue,
+override, areas), `PUT events/{e}/venue/areas/{a}` (organiser up; `{on}`). A venue or area an event has used is
+retired, not deleted (409).
+
+**Bot.** `/venue areas event:` (organisers, checked bot-side from live roles via `BotTier`) opens a private panel:
+limit, where it came from, one toggle button per area (`gnarea:{event}:{area}:{1|0}`). The buttons live in an
+ephemeral panel, not on the public event post, which has no free component rows. Commands are guarded by
+`RequireGameNights` (flag off = polite refusal). Bot extension code is a `GameNights/` folder in the Bot assembly,
+so `ModuleContextTests` covers it.
+
+**Web.** `Venues` tab (only when the feature is on), `/app/guilds/{id}/venues` (members read; organisers add, edit,
+retire, delete venues and areas), and a Venue panel on the event page (everyone sees venue + limit + why;
+organisers pick the venue, override, and open/close areas). The extension components resolve their client
+optionally, so a host without it renders nothing and existing page tests are untouched.
+
+**Limitations (phase 1).** The limit is set on the one event, not on a recurring series' template: the next
+occurrence spawns from the template and needs the venue attached again. Venue choice is on the web only; Discord can
+only open and close areas.
+
+**Core touch points added this step.** `Bot/Program.cs` (using + `AddGameNights()`), `Web/Program.cs` (client
+registration), `Web/Components/GuildTabs.razor` (one `<VenuesTab>`), `Web/Pages/App/EventDetail.razor` (one
+`<EventVenuePanel>`), `Web/_Imports.razor` (one using), and the generated migration + snapshot.
+
+**Verification.** Local: Bot 438 and Web 169 tests pass; the solution builds. The Api venue tests need Docker (not
+running locally), so they run in CI.

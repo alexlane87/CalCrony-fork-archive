@@ -10,4 +10,7 @@ public partial class CalCronyDbContext
     public DbSet<GameNightsTierRole> GameNightsTierRoles => Set<GameNightsTierRole>();
     public DbSet<GameNightEventExtension> GameNightEventExtensions => Set<GameNightEventExtension>();
     public DbSet<GameNightInvite> GameNightInvites => Set<GameNightInvite>();
+    public DbSet<GameNightVenue> GameNightVenues => Set<GameNightVenue>();
+    public DbSet<GameNightVenueArea> GameNightVenueAreas => Set<GameNightVenueArea>();
+    public DbSet<GameNightEventArea> GameNightEventAreas => Set<GameNightEventArea>();
 }

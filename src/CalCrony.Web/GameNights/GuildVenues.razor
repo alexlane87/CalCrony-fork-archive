@@ -1,0 +1,326 @@
+@page "/app/guilds/{GuildId:long}/venues"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+
+<PageTitle>Venues — CalCrony</PageTitle>
+
+<p class="meta-mono text-uppercase mb-2"><a href="/app?all=1">← My servers</a></p>
+<GuildHeading GuildId="GuildId" />
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="h3 mb-0">Venues</h1>
+        <GuildTabs GuildId="GuildId" Active="venues" />
+    </div>
+    <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="showRetired" @bind="showRetired" @bind:after="LoadAsync" />
+        <label class="form-check-label meta-mono" for="showRetired">show retired</label>
+    </div>
+</div>
+
+@if (disabled)
+{
+    <p class="text-body-secondary mt-3">Game Nights isn't switched on for this server.</p>
+}
+else if (error is not null && venues is null)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+else if (venues is null)
+{
+    <div class="spinner-border text-primary mt-3" role="status"></div>
+}
+else
+{
+    @if (error is not null)
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+
+    @if (!tier!.Verified)
+    {
+        <div class="alert alert-warning mt-3">We can't confirm your server roles right now, so editing is paused. Try again in a few minutes.</div>
+    }
+
+    @if (CanEdit)
+    {
+        <div class="card p-3 mt-3" style="max-width:560px">
+            <h2 class="h6 mb-2">Add a venue</h2>
+            <div class="row g-2">
+                <div class="col-12">
+                    <input class="form-control form-control-sm" placeholder="Name" maxlength="@VenueLimits.NameLength" @bind="newName" @bind:event="oninput" />
+                </div>
+                <div class="col-12">
+                    <input class="form-control form-control-sm" placeholder="Address (optional)" maxlength="@VenueLimits.AddressLength" @bind="newAddress" @bind:event="oninput" />
+                </div>
+                <div class="col-6">
+                    <input class="form-control form-control-sm" type="number" min="1" max="@VenueLimits.MaxAttendeeLimit" placeholder="Default limit (optional)" @bind="newLimit" />
+                </div>
+                <div class="col-6">
+                    <button class="btn btn-primary btn-sm" disabled="@(busy || string.IsNullOrWhiteSpace(newName))" @onclick="AddVenueAsync">Add venue</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (venues.Count == 0)
+    {
+        <p class="text-body-secondary mt-3">No venues yet@(CanEdit ? " — add one above." : ".")</p>
+    }
+
+    <div class="d-flex flex-column gap-3 mt-3">
+        @foreach (var venue in venues)
+        {
+            <div class="card p-3" @key="venue.Id">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="fs-5">📍</span>
+                    <span class="fw-semibold flex-grow-1 min-w-0">@venue.Name</span>
+                    @if (!venue.Active)
+                    {
+                        <span class="badge text-bg-secondary">Retired</span>
+                    }
+                    <span class="badge text-bg-primary">@(venue.DefaultLimit is int n ? $"{n} places" : "no limit")</span>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(venue.Address))
+                {
+                    <div class="meta-mono mt-1">@venue.Address</div>
+                }
+
+                @if (venue.Areas.Count > 0)
+                {
+                    <ul class="list-unstyled mt-2 mb-0">
+                        @foreach (var area in venue.Areas)
+                        {
+                            <li class="d-flex align-items-center gap-2 flex-wrap py-1" @key="area.Id">
+                                @if (editingArea == area.Id)
+                                {
+                                    <input class="form-control form-control-sm" style="max-width:12rem" maxlength="@VenueLimits.AreaNameLength" @bind="editAreaName" @bind:event="oninput" />
+                                    <input class="form-control form-control-sm" style="max-width:6rem" type="number" min="1" max="@VenueLimits.MaxAttendeeLimit" @bind="editAreaCapacity" />
+                                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => SaveAreaAsync(venue, area)">Save</button>
+                                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => editingArea = null">Cancel</button>
+                                }
+                                else
+                                {
+                                    <span class="@(area.Active ? "" : "text-body-secondary text-decoration-line-through")">@area.Name</span>
+                                    <span class="meta-mono">+@area.ExtraCapacity</span>
+                                    @if (!area.Active)
+                                    {
+                                        <span class="badge text-bg-secondary">Retired</span>
+                                    }
+                                    @if (CanEdit)
+                                    {
+                                        <button class="btn btn-link btn-sm p-0" @onclick="() => StartEditArea(area)">Edit</button>
+                                        <button class="btn btn-link btn-sm p-0" disabled="@busy" @onclick="() => ToggleAreaActiveAsync(venue, area)">@(area.Active ? "Retire" : "Reinstate")</button>
+                                        <button class="btn btn-link btn-sm p-0 text-danger" disabled="@busy" @onclick="() => DeleteAreaAsync(venue, area)">Delete</button>
+                                    }
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (CanEdit)
+                {
+                    @if (editingVenue == venue.Id)
+                    {
+                        <div class="row g-2 mt-2">
+                            <div class="col-12 col-md-4">
+                                <input class="form-control form-control-sm" maxlength="@VenueLimits.NameLength" @bind="editName" @bind:event="oninput" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <input class="form-control form-control-sm" placeholder="Address" maxlength="@VenueLimits.AddressLength" @bind="editAddress" @bind:event="oninput" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <input class="form-control form-control-sm" type="number" min="1" max="@VenueLimits.MaxAttendeeLimit" placeholder="Limit" @bind="editLimit" />
+                            </div>
+                            <div class="col-6 col-md-2 d-flex gap-2">
+                                <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => SaveVenueAsync(venue)">Save</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => editingVenue = null">Cancel</button>
+                            </div>
+                        </div>
+                    }
+                    else if (addingAreaFor == venue.Id)
+                    {
+                        <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+                            <input class="form-control form-control-sm" style="max-width:12rem" placeholder="Area name (e.g. upstairs)" maxlength="@VenueLimits.AreaNameLength" @bind="newAreaName" @bind:event="oninput" />
+                            <input class="form-control form-control-sm" style="max-width:6rem" type="number" min="1" max="@VenueLimits.MaxAttendeeLimit" placeholder="+places" @bind="newAreaCapacity" />
+                            <button class="btn btn-primary btn-sm" disabled="@(busy || string.IsNullOrWhiteSpace(newAreaName))" @onclick="() => AddAreaAsync(venue)">Add area</button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => addingAreaFor = null">Cancel</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex gap-2 flex-wrap mt-2">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => StartEditVenue(venue)">Edit</button>
+                            <button class="btn btn-outline-primary btn-sm" disabled="@(venue.Areas.Count >= VenueLimits.MaxAreasPerVenue)" @onclick="() => StartAddArea(venue)">＋ Area</button>
+                            <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => ToggleVenueActiveAsync(venue)">@(venue.Active ? "Retire" : "Reinstate")</button>
+                            <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => DeleteVenueAsync(venue)">Delete</button>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public long GuildId { get; set; }
+
+    private MyTierResponse? tier;
+    private List<VenueDto>? venues;
+    private string? error;
+    private bool disabled;
+    private bool busy;
+    private bool showRetired;
+
+    private string newName = "";
+    private string newAddress = "";
+    private int? newLimit;
+
+    private Guid? editingVenue;
+    private string editName = "";
+    private string editAddress = "";
+    private int? editLimit;
+
+    private Guid? addingAreaFor;
+    private string newAreaName = "";
+    private int newAreaCapacity = 5;
+
+    private Guid? editingArea;
+    private string editAreaName = "";
+    private int editAreaCapacity = 1;
+
+    /// <summary>Organisers and above may edit. The API enforces this; the page only hides what it cannot do.</summary>
+    private bool CanEdit => tier is { Verified: true } && tier.Tier >= GameNightsTier.Organiser;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            disabled = mine.NotFound;
+            error = mine.NotFound ? null : mine.Error;
+            return;
+        }
+
+        tier = mine.Value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await GameNights.ListVenuesAsync(GuildId, showRetired);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        error = null;
+        venues = result.Value ?? [];
+    }
+
+    private async Task RunAsync(Func<Task<string?>> action)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            error = await action();
+            if (error is null)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task AddVenueAsync() => RunAsync(async () =>
+    {
+        var result = await GameNights.CreateVenueAsync(GuildId, new CreateVenueRequest(newName, NullIfBlank(newAddress), newLimit));
+        if (result.Success)
+        {
+            newName = "";
+            newAddress = "";
+            newLimit = null;
+        }
+
+        return result.Error;
+    });
+
+    private void StartEditVenue(VenueDto venue)
+    {
+        editingVenue = venue.Id;
+        editName = venue.Name;
+        editAddress = venue.Address ?? "";
+        editLimit = venue.DefaultLimit;
+    }
+
+    private Task SaveVenueAsync(VenueDto venue) => RunAsync(async () =>
+    {
+        var request = new UpdateVenueRequest(
+            Name: editName,
+            Address: NullIfBlank(editAddress), ClearAddress: string.IsNullOrWhiteSpace(editAddress),
+            DefaultLimit: editLimit, ClearDefaultLimit: editLimit is null);
+        var result = await GameNights.UpdateVenueAsync(GuildId, venue.Id, request);
+        if (result.Success)
+        {
+            editingVenue = null;
+        }
+
+        return result.Error;
+    });
+
+    private Task ToggleVenueActiveAsync(VenueDto venue) => RunAsync(async () =>
+        (await GameNights.UpdateVenueAsync(GuildId, venue.Id, new UpdateVenueRequest(Active: !venue.Active))).Error);
+
+    private Task DeleteVenueAsync(VenueDto venue) => RunAsync(async () =>
+        (await GameNights.DeleteVenueAsync(GuildId, venue.Id)).Error);
+
+    private void StartAddArea(VenueDto venue)
+    {
+        addingAreaFor = venue.Id;
+        newAreaName = "";
+        newAreaCapacity = 5;
+    }
+
+    private Task AddAreaAsync(VenueDto venue) => RunAsync(async () =>
+    {
+        var result = await GameNights.CreateAreaAsync(GuildId, venue.Id, new CreateVenueAreaRequest(newAreaName, newAreaCapacity));
+        if (result.Success)
+        {
+            addingAreaFor = null;
+        }
+
+        return result.Error;
+    });
+
+    private void StartEditArea(VenueAreaDto area)
+    {
+        editingArea = area.Id;
+        editAreaName = area.Name;
+        editAreaCapacity = area.ExtraCapacity;
+    }
+
+    private Task SaveAreaAsync(VenueDto venue, VenueAreaDto area) => RunAsync(async () =>
+    {
+        var result = await GameNights.UpdateAreaAsync(GuildId, venue.Id, area.Id, new UpdateVenueAreaRequest(editAreaName, editAreaCapacity));
+        if (result.Success)
+        {
+            editingArea = null;
+        }
+
+        return result.Error;
+    });
+
+    private Task ToggleAreaActiveAsync(VenueDto venue, VenueAreaDto area) => RunAsync(async () =>
+        (await GameNights.UpdateAreaAsync(GuildId, venue.Id, area.Id, new UpdateVenueAreaRequest(Active: !area.Active))).Error);
+
+    private Task DeleteAreaAsync(VenueDto venue, VenueAreaDto area) => RunAsync(async () =>
+        (await GameNights.DeleteAreaAsync(GuildId, venue.Id, area.Id)).Error);
+
+    private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+}

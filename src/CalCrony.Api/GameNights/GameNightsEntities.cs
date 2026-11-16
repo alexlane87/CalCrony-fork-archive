@@ -26,6 +26,12 @@ public class GameNightEventExtension
 
     /// <summary>Who may see the event. Public by default.</summary>
     public GameNightsVisibility Visibility { get; set; } = GameNightsVisibility.Public;
+
+    /// <summary>The venue the event is held at, if any.</summary>
+    public Guid? VenueId { get; set; }
+
+    /// <summary>An organiser-set attendee limit for this event that beats the venue's.</summary>
+    public int? LimitOverride { get; set; }
 }
 
 /// <summary>What an invite list entry is attached to.</summary>
@@ -50,4 +56,58 @@ public class GameNightInvite
 
     /// <summary>The invited Discord user id.</summary>
     public long UserId { get; set; }
+}
+
+/// <summary>A reusable venue. Retired (not deleted) once events have used it.</summary>
+public class GameNightVenue
+{
+    /// <summary>The venue id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The Discord guild (server) id.</summary>
+    public long GuildId { get; set; }
+
+    /// <summary>The venue's name.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>The address, when known.</summary>
+    public string? Address { get; set; }
+
+    /// <summary>The attendee limit with no extra areas on; null means no limit.</summary>
+    public int? DefaultLimit { get; set; }
+
+    /// <summary>False once retired.</summary>
+    public bool Active { get; set; } = true;
+
+    /// <summary>The venue's areas.</summary>
+    public List<GameNightVenueArea> Areas { get; set; } = [];
+}
+
+/// <summary>A part of a venue that adds capacity when switched on for an event.</summary>
+public class GameNightVenueArea
+{
+    /// <summary>The area id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The venue it belongs to.</summary>
+    public Guid VenueId { get; set; }
+
+    /// <summary>The area's name.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>How many more people it holds when on.</summary>
+    public int ExtraCapacity { get; set; }
+
+    /// <summary>False once retired.</summary>
+    public bool Active { get; set; } = true;
+}
+
+/// <summary>An area switched on for one event.</summary>
+public class GameNightEventArea
+{
+    /// <summary>The event.</summary>
+    public Guid EventId { get; set; }
+
+    /// <summary>The area.</summary>
+    public Guid AreaId { get; set; }
 }
