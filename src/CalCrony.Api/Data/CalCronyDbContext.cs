@@ -4,7 +4,7 @@ namespace CalCrony.Api.Data;
 
 /// <summary>EF Core context for all CalCrony state; model configuration (lengths, indexes, cascades) lives in OnModelCreating.</summary>
 /// <param name="options">The context options.</param>
-public class CalCronyDbContext(DbContextOptions<CalCronyDbContext> options) : DbContext(options)
+public partial class CalCronyDbContext(DbContextOptions<CalCronyDbContext> options) : DbContext(options)
 {
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<Guild> Guilds => Set<Guild>();
@@ -261,5 +261,8 @@ public class CalCronyDbContext(DbContextOptions<CalCronyDbContext> options) : Db
             e.HasIndex(a => new { a.GuildId, a.CreatedAt }).IsDescending(false, true);
             e.HasIndex(a => a.CreatedAt);
         });
+
+        // Game Nights extension tables (fork): all configuration lives in GameNights/GameNightsModel.cs.
+        GameNights.GameNightsModel.Apply(modelBuilder);
     }
 }

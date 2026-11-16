@@ -12,7 +12,7 @@ namespace CalCrony.Api.Tests;
 /// <summary>ApiFixture with fake Discord auth AND fake calendar provider, plus a helper that
 /// drives the real login endpoint dance (start → callback → refresh) and returns a
 /// bearer-equipped client for the logged-in user.</summary>
-public sealed class WebAuthFixture : ApiFixture
+public class WebAuthFixture : ApiFixture
 {
     public const string WebOrigin = "https://web.test";
 

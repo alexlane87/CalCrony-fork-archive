@@ -2,6 +2,7 @@ using System.Reflection;
 using CalCrony.Api.Auth;
 using CalCrony.Api.Data;
 using CalCrony.Api.Endpoints;
+using CalCrony.Api.GameNights;
 using CalCrony.Api.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -46,6 +47,7 @@ builder.Services.AddScoped<CalendarAvailabilityService>();
 builder.Services.AddScoped<FreeSlotsService>();
 
 builder.Services.AddScoped<WebTokenService>();
+builder.Services.AddGameNights(builder.Configuration); // fork: Game Nights extension, off unless GameNights:Enabled
 builder.Services.AddScoped<GuildAccessService>();
 builder.Services.AddHttpClient<IDiscordAuthProvider, DiscordAuthProvider>(
     http => http.Timeout = TimeSpan.FromSeconds(20));
@@ -180,6 +182,7 @@ app.MapCalendarEndpoints();
 app.MapOAuthEndpoints();
 app.MapAuthEndpoints();
 app.MapMeEndpoints();
+app.MapGameNights(); // fork: Game Nights extension
 
 app.Run();
 
