@@ -97,6 +97,16 @@ public static class GameNightsModel
             e.HasMany(t => t.Seats).WithOne().HasForeignKey(s => s.TableId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<GameNightSignal>(e =>
+        {
+            e.HasKey(s => new { s.EventId, s.UserId, s.GameId });
+            e.HasOne<Event>().WithMany().HasForeignKey(s => s.EventId).OnDelete(DeleteBehavior.Cascade);
+            // A game with answers is retired, never deleted.
+            e.HasOne<GameNightGame>().WithMany().HasForeignKey(s => s.GameId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(s => new { s.EventId, s.GameId });
+            e.HasIndex(s => s.UserId);
+        });
+
         modelBuilder.Entity<GameNightTableSeat>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

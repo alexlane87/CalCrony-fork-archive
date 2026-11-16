@@ -124,11 +124,13 @@ public static class EventEmbedBuilder
         // final embed (fixed + listCount * listBudget) <= EmbedTotalBudget < 6000. No lower
         // clamp is needed — or wanted, since one could only ever push past the cap.
         var reservedForLists = listCount * MinListBudget;
+        // Fork (Game Nights): hold back room for the game-night summary field (0 when there is none).
+        var budget = EmbedTotalBudget - GameNights.GameNightsEmbed.Reserve(ev);
         var descriptionText = Truncate(
             description.ToString(),
-            Math.Min(DescriptionLimit, EmbedTotalBudget - title.Length - footer.Length - namesLength - reservedForLists));
+            Math.Min(DescriptionLimit, budget - title.Length - footer.Length - namesLength - reservedForLists));
         var fixedLength = title.Length + descriptionText.Length + footer.Length + namesLength;
-        var remaining = EmbedTotalBudget - fixedLength;
+        var remaining = budget - fixedLength;
         var listBudget = Math.Min(FieldValueLimit, remaining / Math.Max(1, listCount));
 
         var builder = new EmbedBuilder()
@@ -152,6 +154,7 @@ public static class EventEmbedBuilder
             }
         }
 
+        GameNights.GameNightsEmbed.AddSummary(builder, ev); // fork: Game Nights summary field
         return builder.Build();
     }
 
@@ -251,6 +254,7 @@ public static class EventEmbedBuilder
                 disabled: closed);
         }
 
+        GameNights.GameNightsEmbed.TryAddPickGames(builder, ref row, ev); // fork: Game Nights button
         return builder.AddRow(row).Build();
     }
 

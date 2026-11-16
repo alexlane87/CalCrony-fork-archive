@@ -1,0 +1,237 @@
+@* The "games tonight" section of the event page: what the night wants to play (demand, with the games nobody
+   can teach flagged), who can teach what (the roster), the signed-in member's own picks, and, for organisers,
+   every member's answers. The demand and roster refresh by themselves while the page is open, but never touch
+   the member's unsaved picks. Renders nothing unless Game Nights is on and the server has games. People show as
+   "user {id}" until names are shown through the name service. *@
+@using CalCrony.Contracts.GameNights
+@implements IDisposable
+@inject IServiceProvider Services
+
+@if (summary is not null && summary.Games.Count > 0)
+{
+    <h2 class="h5 mt-4 mb-2">Games tonight</h2>
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger py-2">@error</div>
+    }
+
+    <div class="card p-3" data-testid="demand">
+        <div class="meta-mono mb-2" data-testid="totals">
+            @summary.Respondents answered · @summary.Teachers teaching · @summary.Experienced know their games · @summary.Fresh new to something
+        </div>
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr><th>Game</th><th class="text-end">Keen</th><th class="text-end">Teach</th><th class="text-end">Play</th><th class="text-end">New</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var game in summary.Games)
+                {
+                    <tr @key="game.GameId" class="@(game.NeedsTeacher ? "table-warning" : "")" data-testid="@(game.NeedsTeacher ? "needs-teacher" : "game-row")">
+                        <td>@game.GameName</td>
+                        <td class="text-end">@game.Interested</td>
+                        <td class="text-end">@game.CanTeach</td>
+                        <td class="text-end">@game.CanPlay</td>
+                        <td class="text-end">@game.NewToIt</td>
+                        <td>@if (game.NeedsTeacher) { <span class="badge text-bg-warning">needs a teacher</span> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (roster.Count > 0)
+    {
+        <div class="card p-3 mt-3" data-testid="roster">
+            <h3 class="h6 mb-2">Who can teach</h3>
+            <ul class="list-unstyled mb-0">
+                @foreach (var entry in roster)
+                {
+                    <li @key="entry.GameId"><strong>@entry.GameName</strong>: @string.Join(", ", entry.Teachers.Select(id => id == UserId ? "you" : $"user {id}"))</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="card p-3 mt-3" data-testid="picks">
+        <h3 class="h6 mb-2">Your picks</h3>
+        @foreach (var game in summary.Games)
+        {
+            <div class="row g-2 align-items-center mb-1" @key="game.GameId">
+                <div class="col-5 col-md-4">@game.GameName</div>
+                <div class="col-7 col-md-5">
+                    <select class="form-select form-select-sm" aria-label="@game.GameName"
+                            value="@PickValue(game.GameId)" @onchange="e => Pick(game.GameId, e.Value?.ToString())">
+                        <option value="">(no answer)</option>
+                        <option value="@SignalKind.CanTeach">I can teach it</option>
+                        <option value="@SignalKind.CanPlay">I can play it</option>
+                        <option value="@SignalKind.NewToIt">I'm new to it</option>
+                        <option value="@SignalKind.NotTonight">Not tonight</option>
+                    </select>
+                </div>
+            </div>
+        }
+        <div class="mt-2">
+            <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="SaveAsync">Save my picks</button>
+            @if (saved)
+            {
+                <span class="meta-mono ms-2">Saved. The Discord post updates within a minute.</span>
+            }
+        </div>
+    </div>
+
+    @if (canOrganise && people.Count > 0)
+    {
+        <div class="card p-3 mt-3" data-testid="people">
+            <h3 class="h6 mb-2">Everyone's answers</h3>
+            <ul class="list-unstyled mb-0">
+                @foreach (var person in people.GroupBy(p => p.UserId).OrderBy(g => g.Key))
+                {
+                    <li @key="person.Key">
+                        <span class="meta-mono">@(person.Key == UserId ? "you" : $"user {person.Key}")</span>:
+                        @string.Join("; ", person.OrderBy(p => GameName(p.GameId)).Select(p => $"{GameName(p.GameId)}: {Describe(p.Kind)}"))
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public long GuildId { get; set; }
+
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    /// <summary>The signed-in member's Discord id, when the page knows it (names them as "you" in lists).</summary>
+    [Parameter] public long UserId { get; set; }
+
+    /// <summary>How often the demand and roster refresh themselves, in seconds; 0 turns it off.</summary>
+    [Parameter] public int RefreshSeconds { get; set; } = 15;
+
+    private readonly CancellationTokenSource stop = new();
+    private GameNightsWebApiClient? client;
+    private NightSignalsSummary? summary;
+    private List<TeacherRosterEntryDto> roster = [];
+    private List<PersonSignalDto> people = [];
+    private Dictionary<Guid, SignalKind> picks = [];
+    private bool canOrganise;
+    private bool busy;
+    private bool saved;
+    private bool started;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Resolved optionally: a host that has not registered the extension simply shows nothing.
+        if (started || Services.GetService(typeof(GameNightsWebApiClient)) is not GameNightsWebApiClient found)
+        {
+            return;
+        }
+
+        client = found;
+        var mine = await client.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            return; // not switched on
+        }
+
+        started = true;
+        canOrganise = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Organiser;
+        await RefreshAsync();
+        var own = await client.GetMySignalsAsync(GuildId, EventId);
+        picks = (own.Value?.Signals ?? []).ToDictionary(s => s.GameId, s => s.Kind);
+        if (RefreshSeconds > 0)
+        {
+            _ = KeepFreshAsync();
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        var result = await client!.GetSignalSummaryAsync(GuildId, EventId);
+        if (!result.Success)
+        {
+            return;
+        }
+
+        summary = result.Value;
+        roster = (await client.GetRosterAsync(GuildId, EventId)).Value ?? [];
+        if (canOrganise)
+        {
+            people = (await client.GetPeopleAsync(GuildId, EventId)).Value ?? [];
+        }
+    }
+
+    private async Task KeepFreshAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(RefreshSeconds));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stop.Token))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page went away.
+        }
+    }
+
+    private string PickValue(Guid gameId) => picks.TryGetValue(gameId, out var kind) ? kind.ToString() : "";
+
+    private void Pick(Guid gameId, string? value)
+    {
+        saved = false;
+        if (Enum.TryParse<SignalKind>(value, out var kind) && !string.IsNullOrEmpty(value))
+        {
+            picks[gameId] = kind;
+        }
+        else
+        {
+            picks.Remove(gameId);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await client!.SetMySignalsAsync(GuildId, EventId, [.. picks.Select(p => new SignalDto(p.Key, p.Value))]);
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            saved = true;
+            await RefreshAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private string GameName(Guid id) => summary?.Games.FirstOrDefault(g => g.GameId == id)?.GameName ?? "a game";
+
+    private static string Describe(SignalKind kind) => kind switch
+    {
+        SignalKind.CanTeach => "can teach",
+        SignalKind.CanPlay => "can play",
+        SignalKind.NewToIt => "new to it",
+        _ => "not tonight",
+    };
+
+    public void Dispose()
+    {
+        stop.Cancel();
+        stop.Dispose();
+    }
+}

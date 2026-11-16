@@ -39,6 +39,28 @@ public sealed class GameNightsApiClient(HttpClient http)
         SendAsync<EventVenueDto>(
             http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue/areas/{areaId}", new SetEventAreaRequest(on), ct), ct);
 
+    /// <summary>A member's answers for a night.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="userId">The member.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The answers, or a display-ready error.</returns>
+    public Task<ApiResult<MySignalsDto>> GetMySignalsAsync(long guildId, Guid eventId, long userId, CancellationToken ct = default) =>
+        SendAsync<MySignalsDto>(http.GetAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals/mine?userId={userId}", ct), ct);
+
+    /// <summary>Records (or clears) one member's answer about one game.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="kind">The answer, or null to clear it.</param>
+    /// <param name="userId">The member.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The member's answers, or a display-ready error.</returns>
+    public Task<ApiResult<MySignalsDto>> SetSignalAsync(
+        long guildId, Guid eventId, Guid gameId, SignalKind? kind, long userId, CancellationToken ct = default) =>
+        SendAsync<MySignalsDto>(
+            http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals/{gameId}", new SetSignalRequest(kind, userId), ct), ct);
+
     /// <summary>A server's games (active ones unless retired ones are asked for).</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>
     /// <param name="ct">Cancels the request.</param>

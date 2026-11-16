@@ -277,6 +277,9 @@ else
     <EventVenuePanel GuildId="ev.GuildId" EventId="ev.Id"
                      OnChanged="async () => ev = (await Api.GetEventAsync(EventId)).Value ?? ev" />
 
+    @* fork: Game Nights game picks, demand and teachers (renders nothing unless switched on) *@
+    <EventGamesPanel GuildId="ev.GuildId" EventId="ev.Id" UserId="UserId" />
+
     @* fork: Game Nights tables (renders nothing unless switched on) *@
     <EventTablesPanel GuildId="ev.GuildId" EventId="ev.Id" UserId="UserId" />
 
