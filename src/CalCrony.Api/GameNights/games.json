@@ -1,0 +1,66 @@
+{
+  "games": [
+    {
+      "version": 1,
+      "key": "root",
+      "name": "Root",
+      "resultType": "RankedPlacement",
+      "minSize": 2,
+      "maxSize": 6,
+      "defaultSize": 4,
+      "ratingEnabled": true,
+      "ratingK": 32,
+      "startRating": 1000,
+      "fields": [
+        { "key": "players", "label": "Players", "kind": "Player", "scope": "Table", "required": true },
+        {
+          "key": "faction", "label": "Faction", "kind": "PickList", "scope": "Player", "required": true, "unique": true,
+          "values": [
+            "Marquise de Cat", "Eyrie Dynasties", "Woodland Alliance", "Vagabond", "Riverfolk Company",
+            "Lizard Cult", "Corvid Conspiracy", "Underground Duchy", "Keepers in Iron", "Lord of the Hundreds"
+          ]
+        },
+        { "key": "score", "label": "Final score", "kind": "Number", "scope": "Player", "required": true },
+        {
+          "key": "left_out", "label": "Faction left out of the draft", "kind": "PickList", "scope": "Table", "required": false,
+          "values": [
+            "Marquise de Cat", "Eyrie Dynasties", "Woodland Alliance", "Vagabond", "Riverfolk Company",
+            "Lizard Cult", "Corvid Conspiracy", "Underground Duchy", "Keepers in Iron", "Lord of the Hundreds"
+          ]
+        },
+        { "key": "seat", "label": "Seat (turn order)", "kind": "Number", "scope": "Player", "required": false },
+        {
+          "key": "map", "label": "Map", "kind": "PickList", "scope": "Table", "required": false,
+          "values": [ "Autumn", "Winter", "Lake", "Mountain" ]
+        },
+        { "key": "landmarks", "label": "Landmarks used", "kind": "Text", "scope": "Table", "required": false },
+        {
+          "key": "deck", "label": "Deck", "kind": "PickList", "scope": "Table", "required": false,
+          "values": [ "Standard", "Exiles and Partisans" ]
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "key": "arcs",
+      "name": "Arcs",
+      "resultType": "RankedPlacement",
+      "minSize": 2,
+      "maxSize": 4,
+      "defaultSize": 4,
+      "ratingEnabled": true,
+      "ratingK": 32,
+      "startRating": 1000,
+      "fields": [
+        { "key": "players", "label": "Players", "kind": "Player", "scope": "Table", "required": true },
+        {
+          "key": "colour", "label": "Player colour", "kind": "PickList", "scope": "Player", "required": true, "unique": true,
+          "values": [ "Red", "Yellow", "Blue", "White" ]
+        },
+        { "key": "score", "label": "Final score", "kind": "Number", "scope": "Player", "required": true },
+        { "key": "leader", "label": "Leader", "kind": "Text", "scope": "Player", "required": false },
+        { "key": "round_ended", "label": "Round the game ended", "kind": "Number", "scope": "Table", "required": false }
+      ]
+    }
+  ]
+}

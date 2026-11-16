@@ -117,7 +117,7 @@ Tests: effective limit calculation; override beats default; toggling an area upd
 
 Done when: an organiser can create a venue with an upstairs area, attach it to an event and see the limit change when the area is toggled.
 
-### [ ] Step 3: Game library (data and config)
+### [x] Step 3: Game library (data and config)
 
 Goal: games as configuration.
 

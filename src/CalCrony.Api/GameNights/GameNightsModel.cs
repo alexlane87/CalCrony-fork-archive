@@ -8,6 +8,9 @@ namespace CalCrony.Api.GameNights;
 /// each step that adds tables adds its blocks here, so the core context file does not change again.</summary>
 public static class GameNightsModel
 {
+    /// <summary>Longest game-type label.</summary>
+    public const int GameTypeLabelLength = 60;
+
     /// <summary>Configures the Game Nights entities.</summary>
     /// <param name="modelBuilder">The EF model builder.</param>
     public static void Apply(ModelBuilder modelBuilder)
@@ -46,6 +49,37 @@ public static class GameNightsModel
             e.HasKey(x => new { x.EventId, x.AreaId });
             e.HasOne<GameNightEventExtension>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<GameNightVenueArea>().WithMany().HasForeignKey(x => x.AreaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GameNightGame>(e =>
+        {
+            // Ids are assigned in code. Telling EF so matters for the fields collection: a new field added to
+            // an already-tracked game with a Guid already set would otherwise be taken for an existing row.
+            e.Property(g => g.Id).ValueGeneratedNever();
+            e.Property(g => g.Key).HasMaxLength(GameRules.KeyLength);
+            e.Property(g => g.Name).HasMaxLength(GameRules.NameLength);
+            e.HasIndex(g => new { g.GuildId, g.Key }).IsUnique();
+            e.HasMany(g => g.Fields).WithOne().HasForeignKey(f => f.GameId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(g => g.TypeLinks).WithOne().HasForeignKey(l => l.GameId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GameNightGameField>(e =>
+        {
+            e.Property(f => f.Id).ValueGeneratedNever();
+            e.Property(f => f.Key).HasMaxLength(GameRules.KeyLength);
+            e.Property(f => f.Label).HasMaxLength(GameRules.LabelLength);
+            e.HasIndex(f => new { f.GameId, f.Key }).IsUnique();
+        });
+
+        modelBuilder.Entity<GameNightGameType>(e =>
+        {
+            e.HasKey(t => new { t.GuildId, t.RoleId });
+            e.Property(t => t.Label).HasMaxLength(GameTypeLabelLength);
+        });
+
+        modelBuilder.Entity<GameNightGameTypeLink>(e =>
+        {
+            e.HasKey(l => new { l.GameId, l.TypeRoleId });
         });
 
         modelBuilder.Entity<GameNightInvite>(e =>

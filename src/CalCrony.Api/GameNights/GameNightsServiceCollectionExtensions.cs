@@ -23,21 +23,63 @@ public static class GameNightsServiceCollectionExtensions
         if (configuration.IsGameNightsEnabled())
         {
             services.AddScoped<TierResolver>();
+            services.AddScoped<GameSeeder>();
         }
 
         return services;
     }
 
-    /// <summary>Maps the Game Nights routes when the flag is on.</summary>
+    /// <summary>Maps the Game Nights routes when the flag is on, and arranges for the games config file
+    /// to be applied to the servers listed in <c>GameNights:SeedGuildIds</c> (comma-separated) once the
+    /// host has started (so the migrations have run). Seeding is idempotent and never stops the API
+    /// starting: a problem is logged.</summary>
     /// <param name="app">The web application.</param>
     /// <returns>The web application.</returns>
     public static WebApplication MapGameNights(this WebApplication app)
     {
-        if (app.Configuration.IsGameNightsEnabled())
+        if (!app.Configuration.IsGameNightsEnabled())
         {
-            app.MapGameNightsEndpoints();
+            return app;
+        }
+
+        app.MapGameNightsEndpoints();
+
+        var guildIds = ParseGuildIds(app.Configuration["GameNights:SeedGuildIds"]);
+        if (guildIds.Count > 0)
+        {
+            app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(() => SeedAsync(app, guildIds)));
         }
 
         return app;
+    }
+
+    /// <summary>Parses a comma-separated list of server ids; blanks and anything that is not a number are ignored.</summary>
+    /// <param name="text">The configuration value.</param>
+    /// <returns>The ids.</returns>
+    public static IReadOnlyList<long> ParseGuildIds(string? text) =>
+        [.. (text ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => long.TryParse(part, out var id) && id > 0 ? id : (long?)null)
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .Distinct()];
+
+    private static async Task SeedAsync(WebApplication app, IReadOnlyList<long> guildIds)
+    {
+        try
+        {
+            var file = GameSeedFile.Load(app.Configuration);
+            foreach (var guildId in guildIds)
+            {
+                await using var scope = app.Services.CreateAsyncScope();
+                var result = await scope.ServiceProvider.GetRequiredService<GameSeeder>().ApplyAsync(guildId, file, CancellationToken.None);
+                app.Logger.LogInformation(
+                    "Game Nights games for guild {GuildId}: {Created} created, {Updated} updated, {Skipped} left alone.",
+                    guildId, result.Created, result.Updated, result.Skipped);
+            }
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError(ex, "Game Nights could not apply the games file.");
+        }
     }
 }

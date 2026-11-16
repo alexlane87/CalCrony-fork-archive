@@ -29,6 +29,7 @@ public static class GameNightsEndpoints
         g.MapGet("/probe/admin", () => Results.Ok(new { tier = GameNightsTier.Admin })).RequireTier(GameNightsTier.Admin);
 
         g.MapVenueEndpoints();
+        g.MapGameEndpoints();
 
         g.MapGet("/tier-roles", GetTierRoles).RequireTier(GameNightsTier.Admin);
         g.MapPut("/tier-roles", PutTierRoles).RequireTier(GameNightsTier.Admin);

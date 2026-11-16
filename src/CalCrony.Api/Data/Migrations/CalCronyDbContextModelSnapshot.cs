@@ -1086,6 +1086,141 @@ namespace CalCrony.Api.Data.Migrations
                     b.ToTable("GameNightEventExtensions");
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGame", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("DefaultSize")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("LocallyEdited")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxSize")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinSize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("RatingEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("RatingK")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ResultType")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("RoleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("SeedVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StartRating")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("GameNightGames");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameField", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<bool>("Required")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Unique")
+                        .HasColumnType("boolean");
+
+                    b.PrimitiveCollection<string[]>("Values")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("GameNightGameFields");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameType", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RoleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.HasKey("GuildId", "RoleId");
+
+                    b.ToTable("GameNightGameTypes");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameTypeLink", b =>
+                {
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("TypeRoleId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("GameId", "TypeRoleId");
+
+                    b.ToTable("GameNightGameTypeLinks");
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightInvite", b =>
                 {
                     b.Property<int>("Scope")
@@ -1281,6 +1416,24 @@ namespace CalCrony.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameField", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightGame", null)
+                        .WithMany("Fields")
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGameTypeLink", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightGame", null)
+                        .WithMany("TypeLinks")
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenueArea", b =>
                 {
                     b.HasOne("CalCrony.Api.GameNights.GameNightVenue", null)
@@ -1314,6 +1467,13 @@ namespace CalCrony.Api.Data.Migrations
                     b.Navigation("Options");
 
                     b.Navigation("Votes");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGame", b =>
+                {
+                    b.Navigation("Fields");
+
+                    b.Navigation("TypeLinks");
                 });
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightVenue", b =>
