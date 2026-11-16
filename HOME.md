@@ -4,25 +4,61 @@ This is a fork of [JJWren/CalCrony](https://github.com/JJWren/CalCrony) run on a
 (`alex-pi-1`). Deployment config lives in the private `alex-pi-1` repo under `stack/calcrony/`,
 not here.
 
-## Branches
+## Branches and environments
 
-| Branch | Purpose |
-|---|---|
-| `master` | Clean mirror of upstream `master`. Fast-forward only, never commit here. |
-| `home` (default) | `master` plus our changes: `.github/workflows/arm64-images.yml`, this file, any customisations. |
+| Branch | Deploys to | Purpose |
+|---|---|---|
+| `dev` (default) | **test** stack on the Pi (test Discord app, test server) | Integration branch. All work lands here first, by PR. |
+| `prod` | **prod** stack on the Pi (West Country Leders) | What is live. Only takes PRs from `dev`. |
+| `master` | nothing | Clean mirror of upstream `master`. Fast-forward only, never commit here. |
+
+`dev` and `prod` are protected: changes go in by pull request, the `build-test` and `pr-source`
+checks must pass, and force-pushes and deletion are blocked. `master` only blocks force-pushes and
+deletion.
+
+## Shipping a change
+
+```bash
+git checkout dev && git pull
+git checkout -b fix/poll-picker
+# ...commit...
+gh pr create --base dev            # CI runs; squash-merge when green
+```
+
+1. Merging to `dev` builds arm64 images (`X.Y.Z-dev.N`) and moves the `:dev` tag. The Pi notices
+   within a couple of minutes, deploys the test stack, and posts start/finish messages in the
+   test server's deploy channel.
+2. Try the change in the test Discord server.
+3. Promote: `gh pr create --base prod --head dev --title "release: <what>"`, then merge it with a
+   **merge commit** (not squash, so `dev` and `prod` keep a shared history). That builds
+   `X.Y.Z-wcl.N`, moves `:prod`, and the Pi backs up, deploys and health-checks prod, rolling back
+   to the previous images if the new ones do not come up healthy.
+
+Everything is in `.github/workflows/wcl-pipeline.yml`. The Pi side (deploy script, timers,
+notifications, rollback) is documented in `alex-pi-1` under `stack/calcrony/README.md`.
+
+Database migrations run when the API starts. A rollback puts the old images back but does not
+undo a migration; the pre-deploy backup is the way back from a bad schema change.
 
 ## Syncing from upstream
 
+Upstream changes go through `dev` and the test stack like anything else:
+
 ```bash
 git fetch upstream --tags
-git checkout master && git merge --ff-only upstream/master && git push origin master
-git checkout home && git merge master && git push origin home
+git checkout master && git merge --ff-only upstream/master && git push origin master --tags
+git checkout dev && git pull && git checkout -b sync/upstream-vX.Y.Z
+git merge master                   # resolve conflicts with the customisations below
+gh pr create --base dev            # merge with a MERGE COMMIT so the upstream history is kept
 ```
 
-## Customisations on `home`
+The version prefix comes from the newest upstream `v*` tag reachable from the branch, so push tags.
+
+## Customisations
 
 Keep this list short: every entry is a potential merge conflict on upstream sync.
 
+- `.github/workflows/wcl-pipeline.yml` and this file.
 - `src/CalCrony.Web/Pages/Privacy.razor` and `Terms.razor`: operator is **West Country Leders**
   (not the upstream maintainer), contact is the community's mod team, "last updated" dates bumped.
   The sections describing what the software stores are untouched, so they stay correct. After an
@@ -32,19 +68,8 @@ Keep this list short: every entry is a potential merge conflict on upstream sync
 - Known leftover: the footer's "discord" link (`MainLayout.razor`) points at upstream's community server
   and a test pins that URL.
 
-## Building images for the Pi
+## Upstream workflows
 
-Upstream publishes amd64 images only. Build arm64 images (pushed to `ghcr.io/alexlane87/calcrony-*`):
-
-```bash
-gh workflow run arm64-images.yml -f ref=v0.37.0 -f version=0.37.0
-```
-
-The upstream workflows (`ci`, `codeql`, `release-please`) are **disabled** in this fork so they don't
-open release PRs or push amd64 images. Re-enable in the Actions tab if needed.
-
-Customised builds (our legal pages etc.) come from the `home` branch, not an upstream tag:
-
-```bash
-gh workflow run arm64-images.yml -f ref=home -f version=0.37.0-wcl1
-```
+Upstream publishes amd64 images only, so we build our own arm64 ones. The upstream workflows
+(`ci`, `codeql`, `release-please`) are **disabled** in this fork so they don't open release PRs or
+push amd64 images. Leave them disabled; `wcl-pipeline` replaces them here.
