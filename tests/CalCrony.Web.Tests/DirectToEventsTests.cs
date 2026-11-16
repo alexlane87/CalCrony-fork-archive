@@ -49,12 +49,13 @@ public class DirectToEventsTests : TestContext
     {
         UseGuilds(Guild(111, "West Country Leaders"), Guild(222, "Other Place"));
         var nav = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        var before = nav.Uri;
 
         var cut = Render<Guilds>();
 
         cut.WaitForAssertion(() => Assert.Contains("Other Place", cut.Markup));
         Assert.Contains("West Country Leaders", cut.Markup);
-        Assert.EndsWith("/app", nav.Uri.TrimEnd('/'));
+        Assert.Equal(before, nav.Uri); // no redirect
     }
 
     [Fact]
