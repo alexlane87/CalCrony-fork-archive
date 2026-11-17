@@ -459,3 +459,54 @@ the hierarchy checks need a live server; try `/game add` once on the test server
 
 **Core touch points added this step.** `Contracts/Deliveries.cs` (two enum values), `Api/Services/RoleWatchList.cs`
 (game and type roles), `Web/Components/GuildTabs.razor` (the tab component renamed), and the generated migration + snapshot.
+
+---
+
+# Step 6: game nights and teach visibility
+
+**What landed.** Migration `GameNightsSignals` (additive): `GameNightSignals`, one row per member per game per night
+(`can teach`, `can play`, `new to it`, `not tonight`). Key (night, member, game), so changing an answer updates the row
+and there is never more than one. Cascades with the event; games are retired, never deleted.
+
+**Arithmetic (pure, `SignalMath`).** Per game: counts of each answer; *keen* = teach + play + new (teachers play too);
+*needs a teacher* = keen > 0 and nobody can teach it (passing on a game is not demand). People counts are distinct people:
+*teachers* (can teach at least one game), *experienced* (can teach or play at least one), *fresh* (new to at least one),
+*respondents* (any answer). A person can be both experienced and fresh. Every active game appears, busiest first.
+
+**Routes** (`/guilds/{id}/game-nights/events/{e}/signals...`): `GET` (summary, member), `GET roster` (teachers per game,
+member), `GET people` (everyone's answers, **organiser up**), `GET|PUT mine` (the caller's answers; PUT replaces them all),
+`PUT {gameId}` (one answer; `Kind = null` clears it). The website always means the signed-in member; the bot names the
+member (`UserId`). Hidden nights are not found. Answers are closed once the night is over, and only active games of the
+server can be answered. People are shown as ids until Step 7's name service.
+
+**Throttling the Discord post.** Every change queues a `SyncEventMessage` for the night **due one interval from now**
+(`GameNights:EventPostIntervalSeconds`, default 20, 0 to 600), unless one is already waiting that the bot has not been served
+yet (`Attempts == 0`): that one reads the data fresh when it runs, so it already covers the change. A row the bot has picked
+up may have read the data before the change, so it doesn't count. Result: twenty answers in a window produce one edit, the
+last answer in a window is always shown, and edits are at least an interval apart. Nights with no post queue nothing.
+
+**On the event post (core touch points).** To show the summary and the button on *every* render of the post (RSVP clicks
+re-render it too), the event DTO now carries an optional `GameNights` summary: `EventDto` gained a trailing nullable field,
+the single-event DTO helper in `EventEndpoints` attaches it (only when the server has active games, so other servers'
+posts are untouched), and `EventEmbedBuilder` calls three hooks in `GameNightsEmbed`: it holds back 700 characters of the
+embed budget when there is a summary, adds a "🎲 Game night" field (answered, teaching, know their games, new, and the
+busiest five games with "⚠️ no teacher yet" flags), and adds a **Pick games** button after the RSVP buttons (on the last row
+if it has room, else a new row; left out if Discord's five rows are already full). A stress test pins the embed under
+Discord's limits with the summary on. With no summary the post is exactly as before.
+
+**Discord.** The Pick games button opens a private panel: four games a page, one select menu each (can teach / can play /
+new to it / not tonight / clear), previous and next buttons. Each select saves immediately and redraws; there is no Save button.
+**Web.** A "Games tonight" section on the event page: demand table (games nobody can teach highlighted, with a badge), the
+teacher roster, the member's own picks (saved in one request), and for organisers everyone's answers. It refreshes itself every
+15 seconds while open without touching unsaved picks.
+
+**Not done.** The "experience list" is everyone's answers per person, not a separate seniority ranking. Nothing links answers to
+Arrange tables (phase 2). Per-night counts are not retained beyond the event (they go with it).
+
+**Verification.** Local: solution builds; Bot 492 and Web 196 tests pass (including a stress test of the embed limits and the
+panel/limit checks). The Api tests (answers, replace, roster, visibility, throttle) need Docker and run in CI.
+**Not exercised against real Discord:** the select panel and the edited post; try pressing Pick games on the test server.
+
+**Core touch points added this step.** `Contracts/Events.cs` (`EventDto.GameNights`), `Api/Endpoints/EventEndpoints.cs` (one call in
+the single-event DTO helper), `Bot/EventEmbedBuilder.cs` (budget, field, button hooks), `Web/Pages/App/EventDetail.razor`
+(one `<EventGamesPanel>`), and the generated migration + snapshot.

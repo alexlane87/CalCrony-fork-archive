@@ -160,7 +160,7 @@ Tests: role create path and attach path; permission-missing path returns the war
 
 Done when: adding a game in Discord and on the web both produce a game with an attached role, and the follow button toggles it.
 
-### [ ] Step 6: Game nights and teach visibility
+### [x] Step 6: Game nights and teach visibility
 
 Goal: people say which games they can play or teach, and organisers see demand.
 

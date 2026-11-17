@@ -2,6 +2,23 @@ using CalCrony.Contracts.GameNights;
 
 namespace CalCrony.Api.GameNights;
 
+/// <summary>One member's answer about one game for one night: can teach it, can play it, is new to it, or is
+/// skipping it. Exactly one answer per (night, member, game); changing it updates the row.</summary>
+public class GameNightSignal
+{
+    /// <summary>The game night.</summary>
+    public Guid EventId { get; set; }
+
+    /// <summary>The member's Discord user id.</summary>
+    public long UserId { get; set; }
+
+    /// <summary>The game.</summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>The answer.</summary>
+    public SignalKind Kind { get; set; }
+}
+
 /// <summary>A game a server's members play, defined as data (see <see cref="GameSpec"/>). Unique per
 /// (GuildId, Key). Retired, never deleted, so old tables and results keep their game.</summary>
 public class GameNightGame

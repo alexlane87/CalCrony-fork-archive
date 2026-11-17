@@ -249,6 +249,8 @@ public record RsvpDto(long UserId, Guid OptionId, bool Waitlisted = false);
 /// <param name="AllowMultipleRsvps">Whether a member may hold an RSVP on more than one option at
 /// once. Off (the default) means picking another option switches; on means it adds a seat and a
 /// held option is removed by picking it again. Use <see cref="RsvpsFor"/> for what a member holds.</param>
+/// <param name="GameNights">Fork (Game Nights): what the night's game answers add up to, present only on
+/// single-event responses and only when the server has games. The event post shows it and the Pick games button.</param>
 public record EventDto(
     Guid Id,
     long GuildId,
@@ -274,7 +276,8 @@ public record EventDto(
     string? ChannelName = null,
     DateTimeOffset? RsvpClosesAtUtc = null,
     IReadOnlyList<RoleRefDto>? AllowedRoles = null,
-    bool AllowMultipleRsvps = false)
+    bool AllowMultipleRsvps = false,
+    GameNights.NightSignalsSummary? GameNights = null)
 {
     /// <summary>Unix seconds of the start time, for Discord &lt;t:...&gt; timestamps.</summary>
     public long StartsAtUnix => StartsAtUtc.ToUnixTimeSeconds();

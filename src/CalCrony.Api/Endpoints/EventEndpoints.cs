@@ -806,7 +806,8 @@ public static class EventEndpoints
         // Role names ride along the same way: single-event responses carry them (the detail page
         // overwrites its event with mutation responses), list rows skip the lookup.
         var roleNames = await RoleNames.ForOptionsAsync(db, ev.GuildId, ev.Options, cancellationToken);
-        return ev.ToDto(channelName, roleNames);
+        // Fork (Game Nights): attach the night's game answers when the server has games (no-op otherwise).
+        return await GameNights.NightSummaries.AttachAsync(db, ev.ToDto(channelName, roleNames), cancellationToken);
     }
 
     /// <summary>Applies a partial update; live series occurrences require a Scope (occurrence-only vs template + re-anchor).</summary>

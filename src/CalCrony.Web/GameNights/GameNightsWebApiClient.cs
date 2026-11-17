@@ -112,6 +112,47 @@ public sealed class GameNightsWebApiClient(HttpClient http)
     public Task<ApiResult<EventVenueDto>> SetEventVenueAsync(long guildId, Guid eventId, SetEventVenueRequest request, CancellationToken ct = default) =>
         SendAsync<EventVenueDto>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue", request, ct), ct);
 
+    /// <summary>What a night's game answers add up to.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The summary, or the failure.</returns>
+    public Task<ApiResult<NightSignalsSummary>> GetSignalSummaryAsync(long guildId, Guid eventId, CancellationToken ct = default) =>
+        SendAsync<NightSignalsSummary>(http.GetAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals", ct), ct);
+
+    /// <summary>Who can teach what on a night.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The roster, or the failure.</returns>
+    public Task<ApiResult<List<TeacherRosterEntryDto>>> GetRosterAsync(long guildId, Guid eventId, CancellationToken ct = default) =>
+        SendAsync<List<TeacherRosterEntryDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals/roster", ct), ct);
+
+    /// <summary>Everyone's answers for a night (organisers).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The answers, or the failure.</returns>
+    public Task<ApiResult<List<PersonSignalDto>>> GetPeopleAsync(long guildId, Guid eventId, CancellationToken ct = default) =>
+        SendAsync<List<PersonSignalDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals/people", ct), ct);
+
+    /// <summary>The signed-in member's answers for a night.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The answers, or the failure.</returns>
+    public Task<ApiResult<MySignalsDto>> GetMySignalsAsync(long guildId, Guid eventId, CancellationToken ct = default) =>
+        SendAsync<MySignalsDto>(http.GetAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals/mine", ct), ct);
+
+    /// <summary>Replaces the signed-in member's answers for a night.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="signals">The full set of answers.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The saved answers, or the failure.</returns>
+    public Task<ApiResult<MySignalsDto>> SetMySignalsAsync(long guildId, Guid eventId, IReadOnlyList<SignalDto> signals, CancellationToken ct = default) =>
+        SendAsync<MySignalsDto>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/signals/mine", new SetMySignalsRequest(signals), ct), ct);
+
     /// <summary>A server's games (active ones unless retired ones are asked for).</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>
     /// <param name="ct">Cancels the request.</param>
