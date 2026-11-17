@@ -221,7 +221,7 @@ Tests: Elo maths, tie handling, season rollover, recompute after void, constrain
 
 Done when: three confirmed Root games produce a standings table whose ratings match hand-computed values.
 
-### [ ] Step 10: Role-aware website
+### [x] Step 10: Role-aware website
 
 Goal: the web UI for all of the above, with views driven by tier.
 

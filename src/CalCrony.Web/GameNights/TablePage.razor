@@ -20,7 +20,23 @@ else
     <h1 class="h3 mb-3">@table.GameName, table @table.Number</h1>
     <div style="max-width:560px">
         <TableCard Table="table" GuildId="GuildId" UserId="UserId" CanOrganise="canOrganise" LinkToPage="false" OnChanged="t => table = t" />
+        @if (table.Status != TableStatus.Cancelled)
+        {
+            <a class="btn btn-primary btn-sm mt-3" data-testid="report-link" href="/app/guilds/@GuildId/tables/@table.Id/report">Report a result</a>
+        }
     </div>
+
+    @if (results.Count > 0)
+    {
+        <h2 class="h5 mt-4">Results</h2>
+        <div class="d-grid gap-2" style="max-width:640px" data-testid="table-results">
+            @foreach (var result in results)
+            {
+                <ResultCard @key="result.Id" Result="result" GuildId="GuildId" UserId="UserId" IsModerator="isModerator" ThreadId="table.ThreadId"
+                            OnChanged="r => Replace(r)" />
+            }
+        </div>
+    }
 }
 
 @code {
@@ -31,6 +47,8 @@ else
     private TableDto? table;
     private string? error;
     private bool canOrganise;
+    private bool isModerator;
+    private List<ResultDto> results = [];
 
     private long UserId => AuthApi.Session?.UserId ?? 0;
 
@@ -44,6 +62,7 @@ else
         }
 
         canOrganise = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Organiser;
+        isModerator = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Moderator;
         var result = await GameNights.GetTableAsync(GuildId, TableId);
         if (!result.Success)
         {
@@ -52,5 +71,8 @@ else
         }
 
         table = result.Value;
+        results = (await GameNights.ListTableResultsAsync(GuildId, TableId)).Value ?? [];
     }
+
+    private void Replace(ResultDto changed) => results = [.. results.Select(r => r.Id == changed.Id ? changed : r)];
 }

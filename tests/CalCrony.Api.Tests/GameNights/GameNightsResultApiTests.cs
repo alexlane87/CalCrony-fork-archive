@@ -165,6 +165,43 @@ public class GameNightsResultApiTests(GameNightsFixture fixture) : IClassFixture
     }
 
     [Fact]
+    public async Task The_recent_results_list_is_newest_first_and_filters_by_game_and_status()
+    {
+        var n = await ArrangeAsync();
+        var root = await SubmitAsync(n.P1, n, n.RootTable, ThreeWayRoot(n));
+        var arcs = await SubmitAsync(n.P2, n, n.ArcsTable, new ResultSubmission(
+            [Arcs(n.P1.Id, 1, "Red", 28), Arcs(n.P2.Id, 2, "Blue", 21), Arcs(n.P3.Id, 3, "White", 17)], new Dictionary<string, string> { ["round_ended"] = "5" }));
+        var list = $"/guilds/{n.Guild}/game-nights/results";
+
+        var all = (await n.P3.Client.GetFromJsonAsync<List<ResultDto>>(list))!;
+        Assert.Equal([arcs.Id, root.Id], all.Select(r => r.Id));
+
+        var onlyRoot = (await n.P3.Client.GetFromJsonAsync<List<ResultDto>>($"{list}?gameId={n.Root.Id}"))!;
+        Assert.Equal([root.Id], onlyRoot.Select(r => r.Id));
+
+        Assert.Empty((await n.P3.Client.GetFromJsonAsync<List<ResultDto>>($"{list}?status={(int)ResultStatus.Confirmed}"))!);
+        await Answer(n.P2, n, root.Id, "confirm");
+        await Answer(n.P3, n, root.Id, "confirm");
+        var confirmed = (await n.P3.Client.GetFromJsonAsync<List<ResultDto>>($"{list}?status={(int)ResultStatus.Confirmed}"))!;
+        Assert.Equal([root.Id], confirmed.Select(r => r.Id));
+
+        var mine = (await n.P3.Client.GetFromJsonAsync<List<ResultDto>>($"{list}?userId={n.P3.Id}&take=1"))!;
+        Assert.Single(mine); // take caps the page
+    }
+
+    [Fact]
+    public async Task A_result_from_another_server_never_shows_in_this_servers_list()
+    {
+        var n = await ArrangeAsync();
+        var other = await ArrangeAsync();
+        await SubmitAsync(other.P1, other, other.RootTable, ThreeWayRoot(other));
+
+        var here = (await n.P1.Client.GetFromJsonAsync<List<ResultDto>>($"/guilds/{n.Guild}/game-nights/results"))!;
+
+        Assert.Empty(here);
+    }
+
+    [Fact]
     public async Task A_rejection_disputes_it_tells_the_organisers_once_and_a_moderator_settles_it()
     {
         var n = await ArrangeAsync();

@@ -1,8 +1,8 @@
 @* One table: its game, how full it is, who is sitting and who hosts, a link to its Discord thread, and
    the buttons the viewer may use. A member can sit down or stand up themselves; organisers can also resize
    the table, pick the host from the people sitting, and cancel it. The API enforces all of this; the
-   card only hides what the viewer cannot do. People show as "user {id}" like the RSVP list does, until
-   names are shown through the name service. *@
+   card only hides what the viewer cannot do. People show by the name service's "First L", never a stored
+   real name; a name that cannot be worked out shows as "Unnamed player". *@
 @using CalCrony.Contracts.GameNights
 @inject IServiceProvider Services
 
@@ -34,7 +34,7 @@
         @foreach (var seat in Table.Seats)
         {
             <li @key="seat.UserId" class="py-1">
-                user @seat.UserId
+                @NameOf(seat.UserId)
                 @if (seat.UserId == Table.HostUserId)
                 {
                     <span class="badge text-bg-info">host</span>
@@ -88,7 +88,7 @@
                         <option value="">(none)</option>
                         @foreach (var seat in Table.Seats)
                         {
-                            <option value="@seat.UserId">user @seat.UserId</option>
+                            <option value="@seat.UserId">@NameOf(seat.UserId)</option>
                         }
                     </select>
                 </div>
@@ -127,10 +127,18 @@
 
     private bool Full => Table.Seats.Count >= Table.Size;
 
-    protected override void OnParametersSet()
+    private IReadOnlyDictionary<long, string> names = new Dictionary<long, string>();
+
+    private string NameOf(long userId) => names.GetValueOrDefault(userId, DisplayNames.UnnamedPlayer);
+
+    protected override async Task OnParametersSetAsync()
     {
         size = Table.Size;
         host = Table.HostUserId?.ToString() ?? "";
+        if (Client is { } client)
+        {
+            names = await client.GetNamesAsync(GuildId, Table.Seats.Select(s => s.UserId));
+        }
     }
 
     private GameNightsWebApiClient? Client => Services.GetService(typeof(GameNightsWebApiClient)) as GameNightsWebApiClient;

@@ -71,7 +71,7 @@ Keep this list short: every entry is a potential merge conflict on upstream sync
   sidebar and the pages' back links use it). Touches `Landing.razor`, `Guilds.razor` and the guild
   pages' back links.
 - **Game Nights extension** (in progress, see `PLAN.md` and `docs/FORK-NOTES.md`): lives in `GameNights/`
-  folders in Api and Contracts behind the `GameNights:Enabled` flag (default off). Core edits are listed in
+  folders in Api, Contracts and Web behind the `GameNights:Enabled` flag (default off). Core edits are listed in
   FORK-NOTES (Program.cs, `CalCronyDbContext` partial + one call, `RoleWatchList`, and later steps' seams).
 - `src/CalCrony.Web/Pages/Privacy.razor` and `Terms.razor`: operator is **West Country Leders**
   (not the upstream maintainer), contact is the community's mod team, "last updated" dates bumped.

@@ -1,18 +1,22 @@
-@* The Game Nights pills in the guild tab strip: Venues and Games. Renders nothing unless Game Nights is
-   switched on for this deployment (the API answers 404 to its routes when it is not), so servers that have
-   not opted in never see a link to a feature that is not there. *@
+@* The Game Nights pills in the guild tab strip: Venues, Games, Leagues and Results. Renders nothing unless Game
+   Nights is switched on for this deployment (the API answers 404 to its routes when it is not), so servers that
+   have not opted in never see a link to a feature that is not there. Every member sees every pill: the pages
+   themselves show a member the read-only version and hide the controls their tier cannot use (the API
+   enforces it either way). *@
 @inject IServiceProvider Services
 
 @if (enabled)
 {
     <a class="btn @(Active == "venues" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/venues">Venues</a>
     <a class="btn @(Active == "games" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/games">Games</a>
+    <a class="btn @(Active == "leagues" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/leagues">Leagues</a>
+    <a class="btn @(Active == "results" ? "btn-primary" : "btn-outline-primary")" href="/app/guilds/@GuildId/results">Results</a>
 }
 
 @code {
     [Parameter, EditorRequired] public long GuildId { get; set; }
 
-    /// <summary>The active tab; "venues" or "games" highlights that pill.</summary>
+    /// <summary>The active tab; "venues", "games", "leagues" or "results" highlights that pill.</summary>
     [Parameter] public string Active { get; set; } = "";
 
     private bool enabled;

@@ -1,0 +1,186 @@
+@page "/app/guilds/{GuildId:long}/results"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+@inject AuthApiClient AuthApi
+
+<PageTitle>Results — CalCrony</PageTitle>
+
+<p class="meta-mono text-uppercase mb-2"><a href="/app?all=1">← My servers</a></p>
+<GuildHeading GuildId="GuildId" />
+<div class="d-flex align-items-center gap-3 flex-wrap">
+    <h1 class="h3 mb-0">Results</h1>
+    <GuildTabs GuildId="GuildId" Active="results" />
+</div>
+
+@if (disabled)
+{
+    <p class="text-body-secondary mt-3">Game Nights isn't switched on for this server.</p>
+}
+else if (results is null && error is not null)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+else if (results is null)
+{
+    <div class="spinner-border text-primary mt-3" role="status"></div>
+}
+else
+{
+    <div class="d-flex gap-3 flex-wrap align-items-end mt-2">
+        <div>
+            <label class="form-label meta-mono mb-1" for="results-game">Game</label>
+            <select id="results-game" class="form-select form-select-sm" value="@gameFilter" @onchange="e => FilterAsync(() => gameFilter = e.Value?.ToString() ?? string.Empty)">
+                <option value="">All games</option>
+                @foreach (var game in games)
+                {
+                    <option value="@game.Id">@game.Spec.Name</option>
+                }
+            </select>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" id="results-mine" checked="@onlyMine" @onchange="e => FilterAsync(() => onlyMine = e.Value is true)" />
+            <label class="form-check-label" for="results-mine">Only games I played</label>
+        </div>
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+
+    @if (Waiting.Count > 0)
+    {
+        <h2 class="h5 mt-3">Waiting for you</h2>
+        <div class="d-grid gap-2" style="max-width:640px" data-testid="waiting">
+            @foreach (var result in Waiting)
+            {
+                <ResultCard @key="result.Id" Result="result" GuildId="GuildId" UserId="Me" IsModerator="IsModerator" OnChanged="r => Replace(r)" />
+            }
+        </div>
+    }
+
+    <h2 class="h5 mt-4">Recent results</h2>
+    @if (results.Count == 0)
+    {
+        <p class="text-body-secondary">No results yet. Report one from a table's page.</p>
+    }
+
+    <div class="d-grid gap-2" style="max-width:640px" data-testid="results">
+        @foreach (var result in results)
+        {
+            <ResultCard @key="result.Id" Result="result" GuildId="GuildId" UserId="Me" IsModerator="IsModerator" OnChanged="r => Replace(r)" />
+        }
+    </div>
+
+    @if (CanOrganise)
+    {
+        <h2 class="h5 mt-4">Guests</h2>
+        <p class="text-body-secondary">People without a Discord account who have played. Only their typed "First L" name is kept@(IsModerator ? "; erase one on request." : ".")</p>
+        <ul class="list-unstyled" data-testid="guest-list">
+            @foreach (var guest in guests)
+            {
+                <li @key="guest.Id" class="d-flex gap-2 align-items-center py-1">
+                    <span>@guest.DisplayName</span>
+                    @if (IsModerator)
+                    {
+                        <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => EraseAsync(guest)">Erase name</button>
+                    }
+                </li>
+            }
+            @if (guests.Count == 0)
+            {
+                <li class="text-body-secondary">No guests.</li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public long GuildId { get; set; }
+
+    private MyTierResponse? tier;
+    private List<GameDto> games = [];
+    private List<ResultDto>? results;
+    private List<GuestDto> guests = [];
+    private string gameFilter = "";
+    private bool onlyMine;
+    private string? error;
+    private bool disabled;
+    private bool busy;
+
+    private long Me => AuthApi.Session?.UserId ?? 0;
+
+    private bool CanOrganise => tier is { Verified: true } && tier.Tier >= GameNightsTier.Organiser;
+
+    private bool IsModerator => tier is { Verified: true } && tier.Tier >= GameNightsTier.Moderator;
+
+    private List<ResultDto> Waiting =>
+        [.. (results ?? []).Where(r => r.Status == ResultStatus.Pending && r.AwaitingUserIds.Contains(Me))];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            disabled = mine.NotFound;
+            error = mine.NotFound ? null : mine.Error;
+            return;
+        }
+
+        tier = mine.Value;
+        games = (await GameNights.ListGamesAsync(GuildId, includeRetired: true)).Value ?? [];
+        await LoadAsync();
+        if (CanOrganise)
+        {
+            guests = (await GameNights.ListGuestsAsync(GuildId)).Value ?? [];
+        }
+    }
+
+    private async Task FilterAsync(Action change)
+    {
+        change();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        var result = await GameNights.ListResultsAsync(
+            GuildId,
+            gameId: Guid.TryParse(gameFilter, out var game) ? game : null,
+            userId: onlyMine ? Me : null,
+            take: 50);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        results = result.Value;
+    }
+
+    private void Replace(ResultDto changed) => results = [.. (results ?? []).Select(r => r.Id == changed.Id ? changed : r)];
+
+    private async Task EraseAsync(GuestDto guest)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await GameNights.EraseGuestAsync(GuildId, guest.Id);
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            guests = [.. guests.Where(g => g.Id != guest.Id)];
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

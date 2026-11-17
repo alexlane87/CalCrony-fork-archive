@@ -2,7 +2,7 @@
    can teach flagged), who can teach what (the roster), the signed-in member's own picks, and, for organisers,
    every member's answers. The demand and roster refresh by themselves while the page is open, but never touch
    the member's unsaved picks. Renders nothing unless Game Nights is on and the server has games. People show as
-   "user {id}" until names are shown through the name service. *@
+   the name service's "First L" (never a stored real name). *@
 @using CalCrony.Contracts.GameNights
 @implements IDisposable
 @inject IServiceProvider Services
@@ -47,7 +47,7 @@
             <ul class="list-unstyled mb-0">
                 @foreach (var entry in roster)
                 {
-                    <li @key="entry.GameId"><strong>@entry.GameName</strong>: @string.Join(", ", entry.Teachers.Select(id => id == UserId ? "you" : $"user {id}"))</li>
+                    <li @key="entry.GameId"><strong>@entry.GameName</strong>: @string.Join(", ", entry.Teachers.Select(id => id == UserId ? "you" : NameOf(id)))</li>
                 }
             </ul>
         </div>
@@ -88,7 +88,7 @@
                 @foreach (var person in people.GroupBy(p => p.UserId).OrderBy(g => g.Key))
                 {
                     <li @key="person.Key">
-                        <span class="meta-mono">@(person.Key == UserId ? "you" : $"user {person.Key}")</span>:
+                        <span class="meta-mono">@(person.Key == UserId ? "you" : NameOf(person.Key))</span>:
                         @string.Join("; ", person.OrderBy(p => GameName(p.GameId)).Select(p => $"{GameName(p.GameId)}: {Describe(p.Kind)}"))
                     </li>
                 }
@@ -113,6 +113,7 @@
     private NightSignalsSummary? summary;
     private List<TeacherRosterEntryDto> roster = [];
     private List<PersonSignalDto> people = [];
+    private IReadOnlyDictionary<long, string> names = new Dictionary<long, string>();
     private Dictionary<Guid, SignalKind> picks = [];
     private bool canOrganise;
     private bool busy;
@@ -160,7 +161,12 @@
         {
             people = (await client.GetPeopleAsync(GuildId, EventId)).Value ?? [];
         }
+
+        // Names come from the name service ("First L"), for everyone shown below.
+        names = await client.GetNamesAsync(GuildId, roster.SelectMany(r => r.Teachers).Concat(people.Select(p => p.UserId)));
     }
+
+    private string NameOf(long userId) => names.GetValueOrDefault(userId, DisplayNames.UnnamedPlayer);
 
     private async Task KeepFreshAsync()
     {

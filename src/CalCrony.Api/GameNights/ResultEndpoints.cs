@@ -24,6 +24,7 @@ public static class ResultEndpoints
     /// <param name="g">The <c>/guilds/{guildId}/game-nights</c> group.</param>
     public static void MapResultEndpoints(this RouteGroupBuilder g)
     {
+        g.MapGet("/results", ListRecent).RequireTier(GameNightsTier.Member);
         g.MapGet("/tables/{tableId:guid}/results", ListResults).RequireTier(GameNightsTier.Member);
         g.MapPost("/tables/{tableId:guid}/results", Submit).RequireTier(GameNightsTier.Member);
         g.MapGet("/results/{resultId:guid}", GetResult).RequireTier(GameNightsTier.Member);
@@ -53,6 +54,51 @@ public static class ResultEndpoints
 
         var results = await LoadResults(db).AsNoTracking().Where(r => r.TableId == tableId).OrderBy(r => r.SubmittedAt).ToListAsync(cancellationToken);
         return Results.Ok(await ToDtosAsync(db, guildId, results, null, cancellationToken));
+    }
+
+    /// <summary>The server's most recent results, newest first, for the website's result history: optionally for one game,
+    /// one member or one status. Each result is checked against the same table-visibility rule as reading it directly, so
+    /// a result at a table the caller cannot see never appears.</summary>
+    private static async Task<IResult> ListRecent(
+        long guildId, Guid? gameId, long? userId, ResultStatus? status, int? take, HttpContext context, TierResolver tiers,
+        CalCronyDbContext db, CancellationToken cancellationToken)
+    {
+        var (tier, caller) = await TableEndpoints.WhoAsync(context, tiers, guildId, cancellationToken);
+        var limit = Math.Clamp(take ?? 25, 1, 50);
+
+        var query = LoadResults(db).AsNoTracking()
+            .Where(r => db.GameNightTables.Any(t => t.Id == r.TableId && db.Events.Any(e => e.Id == t.EventId && e.GuildId == guildId)));
+        if (gameId is { } game)
+        {
+            query = query.Where(r => r.GameId == game);
+        }
+
+        if (status is { } wanted)
+        {
+            query = query.Where(r => r.Status == wanted);
+        }
+
+        if (userId is { } member)
+        {
+            query = query.Where(r => r.Players.Any(p => p.UserId == member));
+        }
+
+        // Over-fetch a little so a few hidden rows do not leave the page short, then keep what the caller may see.
+        var candidates = await query.OrderByDescending(r => r.SubmittedAt).ThenBy(r => r.Id).Take(limit * 3).ToListAsync(cancellationToken);
+        var visible = new List<GameNightResult>();
+        foreach (var candidate in candidates)
+        {
+            if (await CanSeeAsync(db, guildId, candidate, caller, tier, cancellationToken))
+            {
+                visible.Add(candidate);
+                if (visible.Count == limit)
+                {
+                    break;
+                }
+            }
+        }
+
+        return Results.Ok(await ToDtosAsync(db, guildId, visible, null, cancellationToken));
     }
 
     private static async Task<IResult> GetResult(
