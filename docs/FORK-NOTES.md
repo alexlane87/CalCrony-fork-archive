@@ -713,3 +713,38 @@ submit request; result cards for each tier; history, guests and erase; leagues a
 **Not exercised against real Discord or a browser.** The pages were checked through component tests only; open Leagues, Results and a table's report form on the test stack.
 
 **Core touch points added this step.** None: everything is in the extension's folders.
+
+
+---
+
+# Step 11: hardening and handover
+
+**Endpoint review, made permanent.** Every Game Nights route was listed with its tier and what filters its rows. The review found no route without a
+tier; the gap was that nothing could *check* that, because `RequireTier` is an endpoint filter and leaves no trace on the route. It now also records a
+`RequiredTier` metadata item (`TierGuard.cs`), and `GameNightsRouteAuditTests` pins **every Game Nights route** to its tier: a route added without one, a pinned route
+that disappears, or a tier that is loosened or tightened fails the test and shows in the diff. It also pins the five bot-only routes (role status, table thread,
+result post id, member names and the wanted-names list) and that `GET /me` is the only route open to every signed-in caller. Row filters, checked by reading: tables,
+results and the new results list go through `CanSeeTableAsync` per row; signals and the event venue go through `CanSeeEventAsync`; the league routes only ever see
+public, confirmed data (the database constraint guarantees it). The `/probe/*` routes are leftovers from Step 1 used by the tier tests; they leak nothing and stay.
+
+**Load check, and a lock.** `GameNightsLoadApiTests` sends **300 answers from 300 different people at once** (40 in flight) to one night with a posted message, and asserts every
+answer is stored, the summary counts 300 respondents and **exactly one** held-back `SyncEventMessage` is queued, due about an interval out; a second wave after the bot has
+picked up the first row queues exactly one more. The throttle did a check-then-insert with no lock, so two answers arriving together could both find nothing waiting and each
+queue an edit. Both answer routes now take a per-night Postgres advisory transaction lock (`EventPostThrottle.LockNightAsync`, keyed on the event, released on commit) around
+"apply the answer, queue the edit if none is waiting, save". Different nights never wait for each other. I did not see the race fail before adding the lock (it depends on
+timing); the test is what stops it coming back.
+
+**Privacy, verified in the data and not only the schema.** Two new tests. One creates a guest ("yolanda zxqv", stored as "Yolanda Z"), tries to push a raw nickname for a
+member (refused with 400), reports a result with the guest, then searches **every text and JSON column of every table** for the guest's first name, the nickname and the
+surnames behind the initials: the raw nickname and surnames are found nowhere, the guest's name is found while the guest exists and **nowhere at all after a moderator erases it**
+(the result then reads "Former guest"). The other asserts no Game Nights table has a binary (`bytea`) column, so a photo could not be written even by mistake. The guest erase route
+already existed (`DELETE guests/{id}`, moderator). The Step 7 schema test (no photo, link, nickname or username columns) still holds.
+
+**README and notes.** README has a Game Nights section (flag, every setting with its default, the role-to-tier mapping with a working `curl`, game types, the games file, the bot
+permissions and the intents it does and does not use, and what is stored about people). `docs/PHASE-2-NOTES.md` lists what is intentionally missing (arranger, polls, tournaments,
+check-in, help guide, private-game UI, moderator queue and admin screens, TI4, other rating schemes) with the hook left for each, plus **four things to do before prod** that are not
+phase 2: the privacy paragraph, a walk-through on the test stack, a screen for the role-to-tier mapping, and the invite permissions.
+
+**Verification.** A local .NET 10 SDK is at `C:\Users\alexp\dotnet10-sdk` (not on PATH; the plan said there was none): the solution builds locally. Docker was not running, so the Api tests (including the three new files' worth) run in CI only.
+
+**Core touch points added this step.** None.

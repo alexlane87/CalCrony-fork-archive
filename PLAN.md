@@ -236,7 +236,7 @@ Tests: component and API tests per tier; the photo pass-through leaves no residu
 
 Done when: a member sees only their allowed views, an organiser sees the admin pages, and a result reported from the web appears in the thread with the photo and in the standings once confirmed.
 
-### [ ] Step 11: Hardening and handover
+### [x] Step 11: Hardening and handover
 
 Goal: ready to deploy and to merge upstream.
 
