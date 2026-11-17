@@ -20,14 +20,15 @@ namespace CalCrony.Api.GameNights;
 /// <param name="RatingK">The rating K-factor.</param>
 /// <param name="StartRating">The starting rating.</param>
 /// <param name="Fields">The result questions.</param>
+/// <param name="PhotoRequired">Whether a report must say the board photo has been posted.</param>
 public sealed record SeedGame(
     int Version, string Key, string Name, GameResultType ResultType, int MinSize, int MaxSize, int DefaultSize,
-    bool RatingEnabled, int RatingK, int StartRating, IReadOnlyList<GameFieldSpec> Fields)
+    bool RatingEnabled, int RatingK, int StartRating, IReadOnlyList<GameFieldSpec> Fields, bool PhotoRequired = false)
 {
     /// <summary>The definition without the version.</summary>
     /// <returns>The game definition.</returns>
     public GameSpec ToSpec() => new(
-        Key, Name, ResultType, MinSize, MaxSize, DefaultSize, RatingEnabled, RatingK, StartRating, Fields);
+        Key, Name, ResultType, MinSize, MaxSize, DefaultSize, RatingEnabled, RatingK, StartRating, Fields, PhotoRequired: PhotoRequired);
 }
 
 /// <summary>The games config file.</summary>

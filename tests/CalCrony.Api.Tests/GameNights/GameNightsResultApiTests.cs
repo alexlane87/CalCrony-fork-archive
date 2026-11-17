@@ -422,7 +422,8 @@ public class GameNightsResultApiTests(GameNightsFixture fixture) : IClassFixture
 
         Assert.NotEmpty(columns);
         var forbidden = new[] { "photo", "image", "picture", "url", "link", "blob", "file", "nick", "username", "avatar", "realname" };
-        Assert.Empty(columns.Where(c => forbidden.Any(f => c.Split('.')[1].Contains(f))));
+        // The one allowed exception is a SETTING: whether a game's report must say the photo was posted (a yes/no on the game).
+        Assert.Empty(columns.Where(c => c != "gamenightgames.photorequired" && forbidden.Any(f => c.Split('.')[1].Contains(f))));
         // The only column that holds a person's name is the derived First L (and a guest's typed name).
         Assert.Equal(
             ["gamenightguests.displayname", "gamenightmembernames.displayname"],

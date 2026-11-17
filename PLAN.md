@@ -189,7 +189,7 @@ Tests: state transitions; validator wiring; nickname parsing cases (single name,
 
 Done when: a Root and an Arcs result can be submitted, confirmed and disputed through the API, and the database contains no member real names and no photo data.
 
-### [ ] Step 8: Result reporting, Discord flow
+### [x] Step 8: Result reporting, Discord flow
 
 Goal: the Report game button in the table thread.
 

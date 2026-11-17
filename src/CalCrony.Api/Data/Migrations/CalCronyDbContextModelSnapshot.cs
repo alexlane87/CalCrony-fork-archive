@@ -1122,6 +1122,9 @@ namespace CalCrony.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("PhotoRequired")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("RatingEnabled")
                         .HasColumnType("boolean");
 
@@ -1314,6 +1317,9 @@ namespace CalCrony.Api.Data.Migrations
 
                     b.Property<Instant>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("SummaryMessageId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("TableId")
                         .HasColumnType("uuid");

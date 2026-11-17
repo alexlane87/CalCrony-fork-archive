@@ -69,6 +69,15 @@ public enum DeliveryType
 
     /// <summary>Game Nights (fork): a reported result was rejected; tell the organisers. Payload <see cref="GameNights.ResultDisputedPayload"/>.</summary>
     ResultDisputed = 21,
+
+    /// <summary>Game Nights (fork): a result was reported; post it in the table's thread for the others to confirm. Payload <see cref="GameNights.ResultNoticePayload"/>.</summary>
+    ResultSubmitted = 22,
+
+    /// <summary>Game Nights (fork): a reported result is still waiting for answers; remind the people who have not answered. Payload <see cref="GameNights.ResultNoticePayload"/>.</summary>
+    ResultReminder = 23,
+
+    /// <summary>Game Nights (fork): a result was confirmed or withdrawn; say so in the table's thread. Payload <see cref="GameNights.ResultNoticePayload"/>.</summary>
+    ResultSettled = 24,
 }
 
 /// <summary>An outbox row the bot must post to Discord. PayloadJson deserializes per <see cref="Type"/>.</summary>

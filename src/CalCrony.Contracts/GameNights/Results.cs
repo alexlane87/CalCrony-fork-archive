@@ -82,7 +82,7 @@ public record ResultDto(
     Guid Id, Guid TableId, Guid EventId, Guid GameId, string GameName, ResultStatus Status, long ReporterUserId,
     DateTimeOffset SubmittedAtUtc, DateTimeOffset? ConfirmedAtUtc, IReadOnlyList<ResultPlayerDto> Players,
     IReadOnlyDictionary<string, string> TableValues, IReadOnlyList<ResultConfirmationDto> Confirmations,
-    IReadOnlyList<long> AwaitingUserIds, IReadOnlyList<long> UnnamedUserIds);
+    IReadOnlyList<long> AwaitingUserIds, IReadOnlyList<long> UnnamedUserIds, long? SummaryMessageId = null);
 
 /// <summary>Reports a result for a table. No photo is part of this: the board photo stays in Discord.</summary>
 /// <param name="Submission">Who played and the answers; checked by <see cref="ResultValidator"/>.</param>
@@ -132,6 +132,18 @@ public record WantedNamesResponse(IReadOnlyList<long> UserIds);
 /// <param name="RejectedByUserId">Who rejected it.</param>
 /// <param name="NotifyRoleIds">The roles mapped to organiser, moderator or admin, to mention.</param>
 public record ResultDisputedPayload(Guid ResultId, Guid TableId, long GuildId, long RejectedByUserId, IReadOnlyList<long> NotifyRoleIds);
+
+/// <summary>Outbox payload for the result posts: submitted, reminder, settled. The bot reads the result from the API, so
+/// the notice is safe to repeat and always describes the result as it is now.</summary>
+/// <param name="ResultId">The result.</param>
+/// <param name="GuildId">The Discord guild (server) id.</param>
+/// <param name="TableId">The table.</param>
+public record ResultNoticePayload(Guid ResultId, long GuildId, Guid TableId);
+
+/// <summary>Records the Discord message the bot posted for a result (bot only), so it can be updated when the result
+/// settles.</summary>
+/// <param name="MessageId">The message id, or null to forget it.</param>
+public record SetResultMessageRequest(long? MessageId);
 
 /// <summary>The "First L" convention for how people are shown. A name is read from a server nickname by the bot;
 /// the API only ever stores this derived form.</summary>

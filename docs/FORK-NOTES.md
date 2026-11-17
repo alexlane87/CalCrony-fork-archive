@@ -572,3 +572,50 @@ as "user {id}"; wiring the name routes into every page is Step 10. League effect
 names, guests, the schema privacy check, the majority rule) need Docker and run in CI.
 
 **Core touch points added this step.** `Contracts/Deliveries.cs` (one enum value), and the generated migration + snapshot.
+
+---
+
+# Step 8: result reporting, Discord flow
+
+**What landed.** Migration `GameNightsReportFlow` (additive, two columns): `GameNightGames.PhotoRequired` (a yes/no setting)
+and `GameNightResults.SummaryMessageId` (the Discord message the bot posted for the result). Three more core delivery types:
+`ResultSubmitted = 22`, `ResultReminder = 23`, `ResultSettled = 24`.
+
+**The flow.** Every table thread gets a **Report game** button (also `/table report`), for games Discord can handle (a player
+list, at most 25 players, pick-lists of at most 25 values; bigger games are reported on the website). Pressing it opens a
+private (ephemeral) multi-step message, built from the game's own question list, so a new game needs no new code:
+1. **Players** (a user select, with the seated players already chosen and a "use the seated" button).
+2. **Places**: per-player selects, three to a page (Discord's five rows: three selects, page buttons, step buttons); or "who won?"
+   for single-winner games; or a side per player for winning-side games.
+3. **Required questions first** (per-player pick-lists such as faction/colour as paged selects; table-wide pick-lists as one
+   select; typed answers such as scores in a **form, five inputs at a time**, which is Discord's limit, so six players need two
+   forms), **then the optional ones, each skippable**.
+4. **Photo**, then **Summary** with Submit and Edit. Submit is switched off while anything would be refused (the shared validator
+   plus the photo rule), and Edit goes back to the places keeping every answer.
+All the rules live in `ReportFlow` (plain operations on a `ReportSession`); the Discord module only translates interactions into
+calls and redraws. In memory for 20 minutes, only the person who started a report can continue it.
+
+**The photo.** The step asks the reporter to post a photo of the final board in the thread. The bot **never downloads or stores
+it and the API never sees it**: no photo or link is part of any request (tested). The reporter may skip it, unless an admin has
+made it required for that game (`/game photo-required game required`, or the game's definition): then Skip is refused and Submit
+stays off until the reporter presses "I've posted it". **That is the reporter's word, not a check**: without the message-content
+intent the bot cannot see attachments, and we do not want that intent just for this.
+
+**After Submit, everything the bot says goes through the outbox**, queued in the same transaction as the result: a
+`ResultSubmitted` post in the table's thread (summary, **Confirm** and **Reject** buttons, pinging only the members who still
+have to answer, plus a nudge to anyone with no usable "First L" nickname), and, while it waits, one `ResultReminder` after
+`GameNights:ResultReminderHours` (default 24, 0 switches reminders off) that does nothing if everyone has answered by then. When it
+settles (the last confirmation, or a moderator confirming or voiding) a `ResultSettled` line is posted and the original post's
+buttons are removed (the bot records the post's message id with the API, and takes the post back if that fails so a retry cannot
+double-post). Confirm and Reject answer the API as the member who pressed them. Rejection and its organiser notice are Step 7's.
+
+**Tests.** The flow is scripted end to end, with no Discord, against the *real* Root and Arcs definitions (the games file is
+embedded into the bot tests): every move, the next screen, and the submission the shared validator accepts; required before
+optional; forms of five; places for each result type; photo skip works and the required flag blocks; and a sweep rendering every
+step and page of both games with 2 to 6 players and 90-character names to check the row, option, custom-id and form limits.
+
+**Not done.** Moderators settle a dispute through the API (and the website in Step 10); there is no `/result` command. Guests
+cannot be added in the Discord flow (website, Step 10). The nickname nudge is a note in the result post, not a DM.
+**Not exercised against real Discord:** the user-select, the form and the buttons; try Report game on the test server.
+
+**Core touch points added this step.** `Contracts/Deliveries.cs` (three enum values), the generated migration + snapshot.

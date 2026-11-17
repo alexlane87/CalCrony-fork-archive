@@ -20,7 +20,8 @@ public static class GameCatalog
         [.. game.Fields.OrderBy(f => f.SortOrder).Select(f =>
             new GameFieldSpec(f.Key, f.Label, f.Kind, f.Scope, f.Required, f.Unique, [.. f.Values]))],
         game.RoleId,
-        [.. game.TypeLinks.Select(l => l.TypeRoleId).Order()]);
+        [.. game.TypeLinks.Select(l => l.TypeRoleId).Order()],
+        game.PhotoRequired);
 
     /// <summary>Writes a definition onto a stored game. Fields are matched by key (updated in place,
     /// added, or removed) rather than replaced wholesale, so the edit never trips the unique
@@ -40,6 +41,7 @@ public static class GameCatalog
         game.RatingEnabled = spec.RatingEnabled;
         game.RatingK = spec.RatingK;
         game.StartRating = spec.StartRating;
+        game.PhotoRequired = spec.PhotoRequired;
 
         var wanted = spec.Fields.Select(f => f.Key).ToHashSet();
         foreach (var gone in game.Fields.Where(f => !wanted.Contains(f.Key)).ToList())

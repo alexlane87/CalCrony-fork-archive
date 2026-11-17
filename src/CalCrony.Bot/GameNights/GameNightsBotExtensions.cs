@@ -31,6 +31,8 @@ public static class GameNightsBotExtensions
         services.AddSingleton<GameFollowService>();
         services.AddSingleton<IExtensionDeliveryHandler, ResultDeliveryHandler>();
         services.AddHostedService<MemberNameSyncService>();
+        services.AddSingleton<ReportSessionStore>();
+        services.AddSingleton<ReportStarter>();
         services.AddSingleton<GameDraftStore>();
         return services;
     }

@@ -88,12 +88,13 @@ public class TableAutocompleteHandler : AutocompleteHandler
 /// <param name="api">The CalCrony API client.</param>
 /// <param name="gameNights">The Game Nights API client.</param>
 /// <param name="tiers">The bot-side tier lookup.</param>
+/// <param name="reports">Starts a result report.</param>
 [CommandContextType(InteractionContextType.Guild)]
 [IntegrationType(ApplicationIntegrationType.GuildInstall)]
 [RequireBotInGuild]
 [RequireGameNights]
 [Group("table", "Tables at a game night")]
-public class TableModule(CalCronyApiClient api, GameNightsApiClient gameNights, BotTier tiers)
+public class TableModule(CalCronyApiClient api, GameNightsApiClient gameNights, BotTier tiers, ReportStarter reports)
     : InteractionModuleBase<SocketInteractionContext>
 {
     /// <summary>Opens a table.</summary>
@@ -185,6 +186,23 @@ public class TableModule(CalCronyApiClient api, GameNightsApiClient gameNights, 
                 ? $"👋 You've left **{t.GameName}, table {t.Number}**."
                 : $"❌ {result.Error}",
             ephemeral: true);
+    }
+
+    /// <summary>Starts reporting a table's result (the same flow as the Report game button in its thread).</summary>
+    /// <param name="table">The table (autocomplete picks it by id).</param>
+    [SlashCommand("report", "Report the result of a table")]
+    public async Task ReportAsync(
+        [Summary("table", "The table"), Autocomplete(typeof(TableAutocompleteHandler))] string table)
+    {
+        await DeferAsync(ephemeral: true);
+        if (Context.User is not SocketGuildUser user || !Guid.TryParse(table, out var id))
+        {
+            await FollowupAsync("Pick a table from the list as you type.", ephemeral: true);
+            return;
+        }
+
+        var (error, text, components) = await reports.StartAsync(user, id);
+        await (error is not null ? FollowupAsync(error, ephemeral: true) : FollowupAsync(text, components: components, ephemeral: true));
     }
 
     /// <summary>The game the caller picked: an id from the autocomplete, or (typed by hand) a name.</summary>
