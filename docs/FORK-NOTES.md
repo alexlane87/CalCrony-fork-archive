@@ -748,3 +748,9 @@ phase 2: the privacy paragraph, a walk-through on the test stack, a screen for t
 **Verification.** A local .NET 10 SDK is at `C:\Users\alexp\dotnet10-sdk` (not on PATH; the plan said there was none): the solution builds locally. Docker was not running, so the Api tests (including the three new files' worth) run in CI only.
 
 **Core touch points added this step.** None.
+
+**Upstream sync (PR #18, cut from `dev`).** `upstream/master` was three commits ahead of the mirror (60 files): the release-notes tooling (`tools/ReleaseNotes`) and its
+tests (`tests/CalCrony.ReleaseNotes.Tests`), tighter permissions on upstream's two release jobs, and docs (`aidlc-docs`, `docs/release-notes`, a README line). **The merge had no
+conflicts and touched none of the files in the Game Nights touch-point table**, so no touch point moved. Checked locally on top of Steps 10 and 11: the solution builds; Bot 535,
+Web 225 and the new ReleaseNotes tests 344 pass (17 skipped, Windows symlink checks); the Api tests need Docker and run in CI. `master` (the mirror) was not advanced: that
+push is the owner's, per HOME.md. The sync PR should be merged with a merge commit so upstream history is kept.
