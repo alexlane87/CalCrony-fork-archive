@@ -153,6 +153,34 @@ Anonymous routes (no credential): `/health`, `/feeds/*` (token in URL), `/oauth/
 | `WEB_PUBLIC_ORIGIN` | *(baked `https://calcrony.app`)* | This deployment's browser-visible origin, substituted into `sitemap.xml`/`robots.txt` at container start so self-hosted instances advertise their own URLs |
 | `ROBOTS_MODE` | *(empty)* | `disallow` serves a disallow-all `robots.txt` — for deployments that must never be indexed (e.g. test stacks) |
 
+### Game Nights extension (this fork)
+
+An opt-in extension for running game nights: venues, tables, a game library, "what do you want to play" answers, result reporting (Root and Arcs ship as examples) and open per-game leagues with ratings. **It is off unless `GameNights__Enabled=true` on the API and the bot** (the web app shows its pages whenever the API answers). Design notes and every touch on core files are in [`docs/FORK-NOTES.md`](docs/FORK-NOTES.md); what is deliberately not built yet is in [`docs/PHASE-2-NOTES.md`](docs/PHASE-2-NOTES.md).
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `GameNights__Enabled` | `false` | Feature flag (API **and** bot). Off means no routes, no commands, no pages; the tables exist but stay empty |
+| `GameNights__ConfirmMode` | `All` | How many players must confirm a reported result: `All` (everyone who played; the reporter counts) or `Majority` (more than half) |
+| `GameNights__EventPostIntervalSeconds` | `20` (0 to 600) | Answers to a night re-render its Discord post at most once per interval, however many arrive |
+| `GameNights__ResultReminderHours` | `24` (0 to 168) | One reminder if a reported result is still unconfirmed after this long; `0` turns it off |
+| `GameNights__NameSyncMinutes` (bot) | `10` (1 to 120) | How often the bot refreshes people's "First L" names |
+| `GameNights__GamesFile` | *(built in: Root, Arcs)* | Path to a games JSON file that **replaces** the built-in one (same shape as [`games.json`](src/CalCrony.Api/GameNights/games.json)): result type, table sizes, rating K and start, and the report questions (player, pick-list, number, text; per player or per table; required or optional). Adding a game is editing JSON |
+| `GameNights__SeedGuildIds` | *(empty)* | Comma-separated server ids to apply the games file to at startup (idempotent). Admins can also press "Add the standard games" on the Games page |
+
+**Role-to-tier mapping.** Tiers are `Member`, `Organiser`, `Moderator`, `Admin`, worked out from the member's Discord roles (the API never calls Discord: the bot pushes role snapshots). A server manager (Manage Server or owner) is Admin, which lets a new server set its own mapping. Set it with the API, with a server manager's login or the bot's key:
+
+```bash
+curl -X PUT "$API/guilds/$GUILD_ID/game-nights/tier-roles" -H "X-Api-Key: $KEY" -H "Content-Type: application/json"   -d '{"roles":[{"roleId":111,"tier":1},{"roleId":222,"tier":2},{"roleId":333,"tier":3}]}'   # 1 organiser, 2 moderator, 3 admin
+```
+
+`PUT` replaces the whole mapping (an empty list makes everyone a Member). Until the bot has checked the mapped roles (every `Roles__ReconcileMinutes`, 10 by default) anything above Member answers `409 tier_unverifiable`. Every route's tier is pinned by a test, so a route cannot gain or lose a tier unnoticed.
+
+**Game types.** Admins mark which of the server's "interested in" roles are game types with `/game type-add` and `/game type-remove`; a game can be followed through its own role (`/game follow`, `/game panel`).
+
+**Bot permissions.** Beyond the base bot: **Manage Roles** (game roles and following), **Create Public Threads**, **Send Messages in Threads** and **Manage Threads** (one public thread per table, and the result posts in it). These are in the invite link's permission integer; a server that invited the bot earlier needs it re-invited or the permissions granted by hand. Game Nights adds **no new privileged intent** (it uses the Server Members intent the bot already needs for roles) and deliberately does **not** use the Message Content intent.
+
+**What it stores about people.** A member's Discord id and a derived "First L" name (from their server nickname; the bot pushes only that, never the nickname), only for people who take part. Guests (no Discord account) have only a typed "First L", erasable by a moderator. **No photos or links are ever stored:** the board photo is posted in the table's Discord thread and stays there. League results and ratings are kept beyond the 90-day retention window (that is the point of a league). The privacy page needs a paragraph on this before the extension is switched on for a server other than your own.
+
 ## Running locally
 
 ```bash

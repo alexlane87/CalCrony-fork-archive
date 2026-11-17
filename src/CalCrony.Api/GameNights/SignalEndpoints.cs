@@ -120,9 +120,14 @@ public static class SignalEndpoints
             return Bad("Choose a game from this server's library (retired games can't be answered).");
         }
 
-        await ApplyAsync(db, eventId, subject, [new SignalDto(gameId, request.Kind ?? default)], clearOnly: request.Kind is null, replaceAll: false, cancellationToken);
-        await EventPostThrottle.EnqueueAsync(db, ev, clock, Interval(configuration), cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+        await using (var transaction = await EventPostThrottle.LockNightAsync(db, ev.Id, cancellationToken))
+        {
+            await ApplyAsync(db, eventId, subject, [new SignalDto(gameId, request.Kind ?? default)], clearOnly: request.Kind is null, replaceAll: false, cancellationToken);
+            await EventPostThrottle.EnqueueAsync(db, ev, clock, Interval(configuration), cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
         return Results.Ok(await MineAsync(db, eventId, subject, cancellationToken));
     }
 
@@ -158,9 +163,14 @@ public static class SignalEndpoints
             return Bad("Every game must be one in this server's library (retired games can't be answered).");
         }
 
-        await ApplyAsync(db, eventId, subject, wanted, clearOnly: false, replaceAll: true, cancellationToken);
-        await EventPostThrottle.EnqueueAsync(db, ev, clock, Interval(configuration), cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+        await using (var transaction = await EventPostThrottle.LockNightAsync(db, ev.Id, cancellationToken))
+        {
+            await ApplyAsync(db, eventId, subject, wanted, clearOnly: false, replaceAll: true, cancellationToken);
+            await EventPostThrottle.EnqueueAsync(db, ev, clock, Interval(configuration), cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
         return Results.Ok(await MineAsync(db, eventId, subject, cancellationToken));
     }
 
@@ -282,6 +292,23 @@ public static class NightSummaries
 /// count. The result: at most one edit per interval, and the last change in a window is always shown.</para></summary>
 public static class EventPostThrottle
 {
+    /// <summary>Starts a transaction that holds a per-night lock until it commits, so answers to one night are applied one at a time
+    /// and the "is an edit already waiting?" check in <see cref="EnqueueAsync"/> cannot race: without it, a few hundred answers
+    /// arriving together could each see no waiting edit and each queue their own. The lock is a Postgres advisory transaction
+    /// lock keyed on the event, so different nights never wait for each other and it is released on commit or rollback.</summary>
+    /// <param name="db">The database context.</param>
+    /// <param name="eventId">The night.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>The open transaction; commit it after saving.</returns>
+    public static async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> LockNightAsync(
+        CalCronyDbContext db, Guid eventId, CancellationToken cancellationToken)
+    {
+        var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var key = eventId.ToString();
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", cancellationToken);
+        return transaction;
+    }
+
     /// <summary>Queues (or coalesces into) the delayed re-render for an event. Adds to the context; the caller saves.</summary>
     /// <param name="db">The database context.</param>
     /// <param name="ev">The event.</param>

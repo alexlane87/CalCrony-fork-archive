@@ -467,6 +467,65 @@ public class GameNightsResultApiTests(GameNightsFixture fixture) : IClassFixture
             columns.Where(c => c.Split('.')[1].Contains("name") && c.Contains("display")).Order());
     }
 
+    [Fact]
+    public async Task An_erased_guests_name_and_a_members_raw_nickname_are_found_nowhere_in_the_database()
+    {
+        var n = await ArrangeAsync();
+        var guests = $"/guilds/{n.Guild}/game-nights/guests";
+        // Distinctive words, so a hit anywhere in any table can only be ours.
+        var guest = (await (await n.Admin.PostAsJsonAsync(guests, new CreateGuestRequest("yolanda zxqv"))).Content.ReadFromJsonAsync<GuestDto>())!;
+        Assert.Equal("Yolanda Z", guest.DisplayName);
+        await NameAsync(n, (n.P1.Id, "Alex P"));
+        var rawNickname = await Bot.PutAsJsonAsync($"/guilds/{n.Guild}/game-nights/member-names",
+            new PutMemberNamesRequest([new MemberNameDto(n.P2.Id, "Wolfgang Hrzxqv")]));
+        Assert.Equal(HttpStatusCode.BadRequest, rawNickname.StatusCode); // only the derived First L may be stored
+        var result = await SubmitAsync(n.P1, n, n.RootTable, new ResultSubmission([Root(n.P1.Id, 1, "Marquise de Cat", 30),
+            new(null, guest.Id, 2, new Dictionary<string, string> { ["faction"] = "Vagabond", ["score"] = "14" })]));
+
+        Assert.True(await OccurrencesAsync("Yolanda") >= 1); // it is stored (the guest's own row), so the scan can find it
+        Assert.Equal(0, await OccurrencesAsync("Hrzxqv"));  // a raw nickname never gets in
+        Assert.Equal(0, await OccurrencesAsync("zxqv"));    // nor the surname behind an initial
+
+        Assert.Equal(HttpStatusCode.NoContent, (await n.Admin.DeleteAsync($"{guests}/{guest.Id}")).StatusCode);
+
+        Assert.Equal(0, await OccurrencesAsync("Yolanda")); // gone from every text and JSON column of every table
+        Assert.Equal(DisplayNames.FormerGuest, (await n.P1.Client.GetFromJsonAsync<ResultDto>(Result(n, result.Id, "")))!.Players.Single(p => p.GuestId is not null).DisplayName);
+    }
+
+    [Fact]
+    public async Task No_table_that_holds_game_nights_data_can_store_raw_bytes()
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CalCronyDbContext>();
+
+        var binary = await db.Database.SqlQueryRaw<string>(
+            """SELECT table_name || '.' || column_name AS "Value" FROM information_schema.columns WHERE table_schema = 'public' AND table_name LIKE 'GameNight%' AND data_type = 'bytea'""")
+            .ToListAsync();
+
+        Assert.Empty(binary); // no photo or file could be written even by mistake
+    }
+
+    /// <summary>How many cells, across every text and JSON column of every table, contain the text (case-insensitive).</summary>
+    private async Task<int> OccurrencesAsync(string needle)
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CalCronyDbContext>();
+        var columns = await db.Database.SqlQueryRaw<string>(
+            """SELECT table_name || '|' || column_name AS "Value" FROM information_schema.columns WHERE table_schema = 'public' AND data_type IN ('text', 'character varying', 'json', 'jsonb')""")
+            .ToListAsync();
+
+        var total = 0;
+        foreach (var column in columns)
+        {
+            // Table and column names come from the database's own catalogue, never from input.
+            var parts = column.Split('|');
+            total += (await db.Database.SqlQueryRaw<int>(
+                $"SELECT count(*)::int AS \"Value\" FROM \"{parts[0]}\" WHERE \"{parts[1]}\"::text ILIKE {{0}}", $"%{needle}%").ToListAsync()).Single();
+        }
+
+        return total;
+    }
+
     // ---- helpers ----
 
     private async Task<Night> ArrangeAsync()
