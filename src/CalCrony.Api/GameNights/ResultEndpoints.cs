@@ -196,6 +196,11 @@ public static class ResultEndpoints
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        if (result.Status == ResultStatus.Confirmed)
+        {
+            await LeagueEngine.RecomputeAsync(db, guildId, result.GameId, clock, cancellationToken); // counts at once
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         var dto = (await ToDtosAsync(db, guildId, [result], overrides, cancellationToken))[0];
@@ -275,6 +280,11 @@ public static class ResultEndpoints
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        if (statusBefore != ResultStatus.Confirmed && result.Status == ResultStatus.Confirmed)
+        {
+            await LeagueEngine.RecomputeAsync(db, guildId, result.GameId, clock, cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok((await ToDtosAsync(db, guildId, [result], null, cancellationToken))[0]);
     }
@@ -330,6 +340,12 @@ public static class ResultEndpoints
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        if (result.Status != before && (before == ResultStatus.Confirmed || result.Status == ResultStatus.Confirmed))
+        {
+            // A result entered or left the confirmed set: rebuild the game's ratings (voiding or correcting is just a rebuild).
+            await LeagueEngine.RecomputeAsync(db, guildId, result.GameId, clock, cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok((await ToDtosAsync(db, guildId, [result], null, cancellationToken))[0]);
     }

@@ -35,6 +35,10 @@ public class GameNightEventExtension
 
     /// <summary>The size new tables start at on this night; null means use each game's own default.</summary>
     public int? DefaultTableSize { get; set; }
+
+    /// <summary>True while a result from this night counts towards a league. A database check constraint makes this
+    /// impossible for a night that is not public.</summary>
+    public bool InLeague { get; set; }
 }
 
 /// <summary>What an invite list entry is attached to.</summary>
