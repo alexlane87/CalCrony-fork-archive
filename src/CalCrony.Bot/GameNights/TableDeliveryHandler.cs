@@ -91,6 +91,15 @@ public sealed class TableDeliveryHandler(
             {
                 await thread.SendMessageAsync(welcome.Text, allowedMentions: Only(welcome.Mentions));
             }
+
+            // The button for reporting the result, for games the Discord flow can handle.
+            var game = await gameNights.GetGameAsync(payload.GuildId, table.GameId);
+            if (game.Value is { } reportable && ReportFlow.IsReportable(reportable.Spec))
+            {
+                await thread.SendMessageAsync(
+                    "When you've finished, press **Report game** to record the result.",
+                    components: ReportButton(table.Id), allowedMentions: AllowedMentions.None);
+            }
         }
         catch (Exception ex)
         {
@@ -150,6 +159,12 @@ public sealed class TableDeliveryHandler(
             return null;
         }
     }
+
+    /// <summary>The Report game button for a table's thread.</summary>
+    /// <param name="tableId">The table.</param>
+    /// <returns>The button.</returns>
+    public static MessageComponent ReportButton(Guid tableId) =>
+        new ComponentBuilder().WithButton("Report game", $"{ReportView.StartPrefix}:{tableId}", ButtonStyle.Success, new Emoji("🏁")).Build();
 
     private static AllowedMentions Only(IReadOnlyList<ulong> userIds) =>
         new() { AllowedTypes = AllowedMentionTypes.Users, UserIds = [.. userIds] };

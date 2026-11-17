@@ -17,7 +17,9 @@ internal static class GameNightOutbox
     /// <param name="type">The delivery type.</param>
     /// <param name="channelId">The channel the delivery is for; 0 when it is not about a channel.</param>
     /// <param name="payload">The payload.</param>
-    public static void Enqueue<TPayload>(CalCronyDbContext db, IClock clock, DeliveryType type, long channelId, TPayload payload)
+    /// <param name="delay">How long to wait before it is due (null: now).</param>
+    public static void Enqueue<TPayload>(
+        CalCronyDbContext db, IClock clock, DeliveryType type, long channelId, TPayload payload, Duration? delay = null)
     {
         var now = clock.GetCurrentInstant();
         db.Deliveries.Add(new Delivery
@@ -26,7 +28,7 @@ internal static class GameNightOutbox
             Type = type,
             ChannelId = channelId,
             PayloadJson = JsonSerializer.Serialize(payload),
-            DueAt = now,
+            DueAt = delay is { } wait ? now.Plus(wait) : now,
             Status = DeliveryStatus.Pending,
             CreatedAt = now,
         });

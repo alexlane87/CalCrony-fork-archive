@@ -22,4 +22,9 @@
     <ProjectReference Include="..\..\src\CalCrony.Bot\CalCrony.Bot.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The real Root and Arcs definitions the API seeds, so the report flow is tested against exactly what ships. -->
+    <EmbeddedResource Include="..\..\src\CalCrony.Api\GameNights\games.json" LogicalName="games.json" />
+  </ItemGroup>
+
 </Project>

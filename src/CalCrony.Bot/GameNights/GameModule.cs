@@ -145,6 +145,38 @@ public class GameModule(GameNightsApiClient gameNights, BotTier tiers, GameFollo
         await FollowupAsync(saved.Success ? $"✅ {role.Mention} is no longer a game type." : $"❌ {saved.Error}", ephemeral: true);
     }
 
+    /// <summary>Makes a game's result report require the board photo (or stops requiring it). The bot cannot read the photo;
+    /// "required" means the reporter must say it has been posted before the report can be submitted.</summary>
+    /// <param name="game">The game (autocomplete picks it by id).</param>
+    /// <param name="required">Whether the photo is required.</param>
+    [SlashCommand("photo-required", "Make a game's result report need the board photo (admins)")]
+    public async Task PhotoRequiredAsync(
+        [Summary("game", "The game"), Autocomplete(typeof(GameNameAutocompleteHandler))] string game,
+        [Summary(description: "Require the photo?")] bool required)
+    {
+        await DeferAsync(ephemeral: true);
+        if (!await IsAtLeastAsync(GameNightsTier.Admin))
+        {
+            await FollowupAsync("Only admins can change that.", ephemeral: true);
+            return;
+        }
+
+        var guildId = (long)Context.Guild.Id;
+        var found = Guid.TryParse(game, out var id) ? await gameNights.GetGameAsync(guildId, id) : null;
+        if (found?.Value is not { } current)
+        {
+            await FollowupAsync("Pick a game from the list as you type.", ephemeral: true);
+            return;
+        }
+
+        var saved = await gameNights.UpdateGameAsync(guildId, id, current.Spec with { PhotoRequired = required });
+        await FollowupAsync(
+            saved.Success
+                ? $"✅ A **{current.Spec.Name}** report {(required ? "now needs" : "no longer needs")} the board photo to be posted."
+                : $"❌ {saved.Error}",
+            ephemeral: true);
+    }
+
     private const int GameNightsLabelLimit = 60;
 
     private async Task<bool> IsAtLeastAsync(GameNightsTier tier) =>

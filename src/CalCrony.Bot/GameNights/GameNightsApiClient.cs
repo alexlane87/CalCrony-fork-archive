@@ -39,6 +39,53 @@ public sealed class GameNightsApiClient(HttpClient http)
         SendAsync<EventVenueDto>(
             http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue/areas/{areaId}", new SetEventAreaRequest(on), ct), ct);
 
+    /// <summary>Reports a result for a table (the bot names the reporter).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="request">The report.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The stored result, or a display-ready error.</returns>
+    public Task<ApiResult<ResultDto>> SubmitResultAsync(long guildId, Guid tableId, SubmitResultRequest request, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/tables/{tableId}/results", request, ct), ct);
+
+    /// <summary>A reported result.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="resultId">The result.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The result, or a display-ready error (NotFound when it is gone).</returns>
+    public Task<ApiResult<ResultDto>> GetResultAsync(long guildId, Guid resultId, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(http.GetAsync($"/guilds/{guildId}/game-nights/results/{resultId}", ct), ct);
+
+    /// <summary>A player confirms or rejects a result.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="resultId">The result.</param>
+    /// <param name="confirm">True to confirm, false to reject.</param>
+    /// <param name="userId">The player.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The result, or a display-ready error.</returns>
+    public Task<ApiResult<ResultDto>> AnswerResultAsync(long guildId, Guid resultId, bool confirm, long userId, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(
+            http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/results/{resultId}/{(confirm ? "confirm" : "reject")}", new AnswerResultRequest(userId), ct), ct);
+
+    /// <summary>Records the message the bot posted for a result.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="resultId">The result.</param>
+    /// <param name="messageId">The message id, or null to forget it.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The result, or a display-ready error.</returns>
+    public Task<ApiResult<ResultDto>> SetResultMessageAsync(long guildId, Guid resultId, long? messageId, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(
+            http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/results/{resultId}/summary-message", new SetResultMessageRequest(messageId), ct), ct);
+
+    /// <summary>Replaces a game's definition.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="spec">The new definition.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The game, or a display-ready error.</returns>
+    public Task<ApiResult<GameDto>> UpdateGameAsync(long guildId, Guid gameId, GameSpec spec, CancellationToken ct = default) =>
+        SendAsync<GameDto>(http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/games/{gameId}", spec, ct), ct);
+
     /// <summary>The members the API wants names for.</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>
     /// <param name="ct">Cancels the request.</param>

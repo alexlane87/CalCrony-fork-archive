@@ -69,10 +69,12 @@ public record GameFieldSpec(
 /// <param name="Fields">The result questions, in order.</param>
 /// <param name="RoleId">The Discord role members take to follow the game, if it has one.</param>
 /// <param name="TypeRoleIds">The game-type roles the game belongs to (each must be marked as a game type).</param>
+/// <param name="PhotoRequired">Whether a result report must say the board photo has been posted in the table's thread
+/// before it can be submitted. A setting only: no photo, and nothing about one, is ever sent to or kept by the API.</param>
 public record GameSpec(
     string Key, string Name, GameResultType ResultType, int MinSize, int MaxSize, int DefaultSize,
     bool RatingEnabled, int RatingK, int StartRating, IReadOnlyList<GameFieldSpec> Fields,
-    long? RoleId = null, IReadOnlyList<long>? TypeRoleIds = null);
+    long? RoleId = null, IReadOnlyList<long>? TypeRoleIds = null, bool PhotoRequired = false);
 
 /// <summary>A game as stored.</summary>
 /// <param name="Id">The game id.</param>

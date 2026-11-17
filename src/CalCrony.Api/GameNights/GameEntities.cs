@@ -69,6 +69,9 @@ public class GameNightGame
     /// <summary>True once someone has edited a seeded game, so a newer file version no longer overwrites it.</summary>
     public bool LocallyEdited { get; set; }
 
+    /// <summary>Whether a result report must say the board photo has been posted before it can be submitted.</summary>
+    public bool PhotoRequired { get; set; }
+
     /// <summary>Whether the follow role is being made, or the bot failed to make or grant it.</summary>
     public GameRoleState RoleState { get; set; }
 
@@ -217,6 +220,9 @@ public class GameNightResult
 
     /// <summary>When it was confirmed.</summary>
     public NodaTime.Instant? ConfirmedAt { get; set; }
+
+    /// <summary>The Discord message the bot posted for it in the table's thread (so it can be updated when it settles).</summary>
+    public long? SummaryMessageId { get; set; }
 
     /// <summary>Who played.</summary>
     public List<GameNightResultPlayer> Players { get; set; } = [];

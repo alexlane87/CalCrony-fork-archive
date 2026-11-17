@@ -36,6 +36,7 @@ public static class ResultEndpoints
             Answer(guildId, resultId, request, ConfirmationDecision.Reject, context, tiers, db, clock, configuration, ct))
             .RequireTier(GameNightsTier.Member);
         g.MapPost("/results/{resultId:guid}/resolve", Resolve).RequireTier(GameNightsTier.Moderator);
+        g.MapPut("/results/{resultId:guid}/summary-message", SetSummaryMessage).RequireAuthorization("BotOnly").RequireTier(GameNightsTier.Member);
     }
 
     // ---- reads ----
@@ -184,6 +185,16 @@ public static class ResultEndpoints
 
         SettleIfConfirmed(result, table, memberIds, now, Mode(configuration));
         db.GameNightResults.Add(result);
+
+        // Everything the bot says about this result goes through the outbox, queued with the result itself: the post
+        // for the table's thread now, and (while it is waiting) one reminder for whoever has not answered.
+        var channel = await db.Events.AsNoTracking().Where(e => e.Id == table.EventId).Select(e => e.ChannelId).FirstAsync(cancellationToken);
+        Notice(db, clock, DeliveryType.ResultSubmitted, channel, result, guildId, null);
+        if (result.Status == ResultStatus.Pending && ReminderHours(configuration) is { } hours)
+        {
+            Notice(db, clock, DeliveryType.ResultReminder, channel, result, guildId, Duration.FromHours(hours));
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -242,6 +253,7 @@ public static class ResultEndpoints
         }
 
         var table = (await TableEndpoints.FindTableAsync(db, guildId, result.TableId, track: true, cancellationToken))!;
+        var statusBefore = result.Status;
         if (decision == ConfirmationDecision.Reject)
         {
             if (result.Status != ResultStatus.Disputed)
@@ -256,6 +268,10 @@ public static class ResultEndpoints
         else
         {
             SettleIfConfirmed(result, table, memberIds, now, Mode(configuration));
+            if (statusBefore != ResultStatus.Confirmed && result.Status == ResultStatus.Confirmed)
+            {
+                Notice(db, clock, DeliveryType.ResultSettled, await ChannelOfAsync(db, table, cancellationToken), result, guildId, null);
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -287,6 +303,7 @@ public static class ResultEndpoints
             return Results.Conflict(new ErrorResponse("This result was already withdrawn."));
         }
 
+        var before = result.Status;
         if (request.Action == ResolveAction.Confirm)
         {
             if (result.Status != ResultStatus.Confirmed)
@@ -307,12 +324,43 @@ public static class ResultEndpoints
             }
         }
 
+        if (result.Status != before)
+        {
+            Notice(db, clock, DeliveryType.ResultSettled, await ChannelOfAsync(db, table, cancellationToken), result, guildId, null);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok((await ToDtosAsync(db, guildId, [result], null, cancellationToken))[0]);
     }
 
+    private static async Task<IResult> SetSummaryMessage(
+        long guildId, Guid resultId, SetResultMessageRequest request, CalCronyDbContext db, CancellationToken cancellationToken)
+    {
+        var result = await FindResultAsync(db, guildId, resultId, track: true, cancellationToken);
+        if (result is null)
+        {
+            return Results.NotFound();
+        }
+
+        result.SummaryMessageId = request.MessageId;
+        await db.SaveChangesAsync(cancellationToken);
+        return Results.Ok((await ToDtosAsync(db, guildId, [result], null, cancellationToken))[0]);
+    }
+
     // ---- helpers ----
+
+    private static void Notice(
+        CalCronyDbContext db, IClock clock, DeliveryType type, long channelId, GameNightResult result, long guildId, Duration? delay) =>
+        GameNightOutbox.Enqueue(db, clock, type, channelId, new ResultNoticePayload(result.Id, guildId, result.TableId), delay);
+
+    private static Task<long> ChannelOfAsync(CalCronyDbContext db, GameNightTable table, CancellationToken cancellationToken) =>
+        db.Events.AsNoTracking().Where(e => e.Id == table.EventId).Select(e => e.ChannelId).FirstAsync(cancellationToken);
+
+    /// <summary>How long a reported result waits before the bot reminds the people who have not answered; null for never
+    /// (<c>GameNights:ResultReminderHours</c>, default 24, 0 turns it off).</summary>
+    private static int? ReminderHours(IConfiguration configuration) =>
+        Math.Clamp(configuration.GetValue("GameNights:ResultReminderHours", 24), 0, 168) is var hours && hours > 0 ? hours : null;
 
     /// <summary>Confirms the result (and marks the table played) when enough of the table has confirmed.</summary>
     private static void SettleIfConfirmed(
@@ -383,7 +431,7 @@ public static class ResultEndpoints
                 r.Values.ToDictionary(v => v.Key, v => v.Value),
                 [.. r.Confirmations.OrderBy(c => c.At).Select(c => new ResultConfirmationDto(c.UserId, c.Decision))],
                 r.Status == ResultStatus.Pending ? [.. members.Where(m => !confirmed.Contains(m))] : [],
-                [.. members.Where(m => names[m].Unnamed)]);
+                [.. members.Where(m => names[m].Unnamed)], r.SummaryMessageId);
         })];
     }
 
