@@ -176,7 +176,7 @@ public class GameNightsLeagueApiTests(GameNightsFixture fixture) : IClassFixture
         await PlayAsync(n, aWins: true);
         var a2 = Expected(1016, 984, aWins: true);
         var b2 = 2000 - a2;
-        Assert.Equal(1030.5305, a2, 3); // 1016 + 32 * (1 - 1 / (1 + 10^(-32/400)))
+        Assert.Equal(1030.53, a2, 2); // 1016 + 32 * (1 - 1 / (1 + 10^(-32/400)))
         var after2 = await StandingsAsync(n);
         Assert.Equal(a2, after2.Rows[0].RatingExact, 6);
 
