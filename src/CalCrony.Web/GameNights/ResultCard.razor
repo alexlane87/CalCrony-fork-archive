@@ -1,0 +1,165 @@
+@* One reported result: the game, where it stands, who played with their place and score, and the buttons the
+   viewer may use. A player who still has to answer sees Confirm and Reject; a moderator can accept a pending
+   or disputed result, or void one. The API enforces all of this; the card only hides what the viewer cannot
+   do. Players show by the name service's "First L" (the API sends the name with each player), never a stored
+   real name. The board photo is not part of a result: it lives in the table's Discord thread. *@
+@using CalCrony.Contracts.GameNights
+@inject IServiceProvider Services
+
+<div class="card p-3" data-testid="result-card">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="fs-5">🏆</span>
+        <span class="fw-semibold flex-grow-1 min-w-0">
+            <a href="/app/guilds/@GuildId/tables/@Result.TableId">@Result.GameName</a>
+            <span class="meta-mono text-body-secondary ms-1"><LocalTime Utc="Result.SubmittedAtUtc" Format="d MMM yyyy" /></span>
+        </span>
+        <span class="badge @StatusClass" data-testid="status">@StatusText</span>
+    </div>
+
+    <ol class="list-unstyled mt-2 mb-0" data-testid="players">
+        @foreach (var player in Result.Players)
+        {
+            <li class="d-flex gap-2 py-1 flex-wrap">
+                <span class="meta-mono" style="min-width:1.5rem">@(player.Placement?.ToString() ?? "–")</span>
+                <span class="fw-semibold">@player.DisplayName</span>
+                @if (player.UserId is { } id && id == UserId)
+                {
+                    <span class="badge text-bg-secondary">you</span>
+                }
+                @if (player.Score is { } score)
+                {
+                    <span>@score pts</span>
+                }
+                @if (player.Values.Count > 0)
+                {
+                    <span class="text-body-secondary">@string.Join(", ", player.Values.Select(v => $"{Pretty(v.Key)}: {v.Value}"))</span>
+                }
+            </li>
+        }
+    </ol>
+
+    @if (Result.TableValues.Count > 0)
+    {
+        <div class="text-body-secondary mt-1" data-testid="table-values">@string.Join(" · ", Result.TableValues.Select(v => $"{Pretty(v.Key)}: {v.Value}"))</div>
+    }
+
+    @if (Result.Status == ResultStatus.Pending && Result.AwaitingUserIds.Count > 0)
+    {
+        <div class="text-body-secondary mt-1" data-testid="awaiting">
+            Waiting for @string.Join(", ", Result.AwaitingUserIds.Select(id => id == UserId ? "you" : NameOf(id))).
+        </div>
+    }
+
+    @if (Result.UnnamedUserIds.Contains(UserId))
+    {
+        <div class="alert alert-info py-2 mt-2 mb-0" data-testid="nickname-nudge">
+            You show as "Unnamed player". Set your server nickname to your first name and surname (for example "Alex Pearson") and it will show as "Alex P".
+        </div>
+    }
+
+    @if (ThreadId is { } thread && Result.Status != ResultStatus.Voided)
+    {
+        <div class="mt-2"><a href="https://discord.com/channels/@GuildId/@thread" target="_blank" rel="noopener">Open the table's thread in Discord ↗ (the board photo lives there)</a></div>
+    }
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger py-2 mt-2 mb-0">@error</div>
+    }
+
+    <div class="d-flex gap-2 flex-wrap mt-2">
+        @if (CanAnswer)
+        {
+            <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(c => c.ConfirmResultAsync(GuildId, Result.Id))">Confirm</button>
+            <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => RunAsync(c => c.RejectResultAsync(GuildId, Result.Id))">Reject</button>
+        }
+        @if (IsModerator && Result.Status is ResultStatus.Pending or ResultStatus.Disputed)
+        {
+            <button class="btn btn-outline-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(c => c.ResolveResultAsync(GuildId, Result.Id, ResolveAction.Confirm))">Accept as reported</button>
+        }
+        @if (IsModerator && Result.Status != ResultStatus.Voided)
+        {
+            <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => RunAsync(c => c.ResolveResultAsync(GuildId, Result.Id, ResolveAction.Void))">Void</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ResultDto Result { get; set; } = default!;
+
+    [Parameter, EditorRequired] public long GuildId { get; set; }
+
+    /// <summary>The signed-in user's Discord id.</summary>
+    [Parameter] public long UserId { get; set; }
+
+    /// <summary>Whether the viewer is a moderator or above (controls only; the API enforces it).</summary>
+    [Parameter] public bool IsModerator { get; set; }
+
+    /// <summary>The table's Discord thread, when the page knows it (the table's page links to it otherwise).</summary>
+    [Parameter] public long? ThreadId { get; set; }
+
+    /// <summary>Raised with the result after any change, so the parent can show it.</summary>
+    [Parameter] public EventCallback<ResultDto> OnChanged { get; set; }
+
+    private bool busy;
+    private string? error;
+    private IReadOnlyDictionary<long, string> names = new Dictionary<long, string>();
+
+    private GameNightsWebApiClient? Client => Services.GetService(typeof(GameNightsWebApiClient)) as GameNightsWebApiClient;
+
+    private bool CanAnswer => Result.Status == ResultStatus.Pending && Result.AwaitingUserIds.Contains(UserId);
+
+    private string StatusText => Result.Status switch
+    {
+        ResultStatus.Confirmed => "Confirmed",
+        ResultStatus.Disputed => "Disputed",
+        ResultStatus.Voided => "Voided",
+        _ => "Waiting for confirmation",
+    };
+
+    private string StatusClass => Result.Status switch
+    {
+        ResultStatus.Confirmed => "text-bg-success",
+        ResultStatus.Disputed => "text-bg-danger",
+        ResultStatus.Voided => "text-bg-secondary",
+        _ => "text-bg-warning",
+    };
+
+    private string NameOf(long userId) => names.GetValueOrDefault(userId, DisplayNames.UnnamedPlayer);
+
+    private static string Pretty(string key) => key.Length == 0 ? key : char.ToUpperInvariant(key[0]) + key[1..].Replace('_', ' ');
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Client is { } client && Result.AwaitingUserIds.Count > 0)
+        {
+            names = await client.GetNamesAsync(GuildId, Result.AwaitingUserIds);
+        }
+    }
+
+    private async Task RunAsync(Func<GameNightsWebApiClient, Task<CalCrony.Web.Api.ApiResult<ResultDto>>> action)
+    {
+        if (Client is not { } client)
+        {
+            return;
+        }
+
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await action(client);
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            await OnChanged.InvokeAsync(result.Value!);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

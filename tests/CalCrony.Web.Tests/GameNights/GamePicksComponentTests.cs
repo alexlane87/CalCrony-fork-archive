@@ -39,6 +39,7 @@ public class GamePicksComponentTests : TestContext
         routes[$"GET {Night("/roster")}"] = (HttpStatusCode.OK, (roster ?? []).ToList());
         routes[$"GET {Night("/mine")}"] = (HttpStatusCode.OK, new MySignalsDto([.. mine ?? []]));
         routes[$"GET {Night("/people")}"] = (HttpStatusCode.OK, (people ?? []).ToList());
+        routes[$"GET /guilds/{Guild}/game-nights/names"] = (HttpStatusCode.OK, new Dictionary<string, string> { ["77"] = "Sam T" });
     }
 
     private static NightSignalsSummary Summary() => new(
@@ -86,7 +87,7 @@ public class GamePicksComponentTests : TestContext
         var cut = Panel();
 
         cut.WaitForAssertion(() => Assert.Contains("Root", cut.Find("[data-testid=roster]").TextContent));
-        Assert.Contains("you, user 77", cut.Find("[data-testid=roster]").TextContent);
+        Assert.Contains("you, Sam T", cut.Find("[data-testid=roster]").TextContent);
     }
 
     [Fact]
@@ -140,7 +141,8 @@ public class GamePicksComponentTests : TestContext
 
         organiser.WaitForAssertion(() => Assert.Contains("Everyone's answers", organiser.Markup));
         var text = organiser.Find("[data-testid=people]").TextContent;
-        Assert.Contains("user 77", text);
+        Assert.Contains("Sam T", text);
+        Assert.DoesNotContain("user 77", text);
         Assert.Contains("Arcs: new to it", text);
         Assert.Contains("you", text);
         Assert.Contains("Root: can teach", text);

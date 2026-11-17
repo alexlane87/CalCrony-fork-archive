@@ -1,0 +1,312 @@
+@page "/app/guilds/{GuildId:long}/tables/{TableId:guid}/report"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+@inject AuthApiClient AuthApi
+
+<PageTitle>Report a result — CalCrony</PageTitle>
+
+@if (error is not null && draft is null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (draft is null || table is null)
+{
+    <div class="spinner-border text-primary" role="status"></div>
+}
+else if (submitted is not null)
+{
+    <p class="meta-mono text-uppercase mb-2"><a href="/app/guilds/@GuildId/results">← Results</a></p>
+    <h1 class="h3 mb-3">Result reported</h1>
+    <div style="max-width:640px">
+        <ResultCard Result="submitted" GuildId="GuildId" UserId="UserId" IsModerator="IsModerator" ThreadId="table.ThreadId" OnChanged="r => submitted = r" />
+    </div>
+    <div class="alert alert-info mt-3" style="max-width:640px" data-testid="photo-prompt">
+        Now post a photo of the final board in the table's thread@(photoRequired ? " (this game asks for one)" : ""). It stays in Discord: this site never uploads or keeps photos.
+        The other players confirm the result in Discord or on the Results page.
+        @if (table.ThreadId is { } thread)
+        {
+            <div class="mt-2"><a href="https://discord.com/channels/@GuildId/@thread" target="_blank" rel="noopener">Open the table's thread in Discord ↗</a></div>
+        }
+    </div>
+}
+else
+{
+    <p class="meta-mono text-uppercase mb-2"><a href="/app/guilds/@GuildId/tables/@table.Id">← Back to the table</a></p>
+    <h1 class="h3 mb-3">Report a result: @table.GameName, table @table.Number</h1>
+
+    @if (table.Status == TableStatus.Cancelled)
+    {
+        <div class="alert alert-warning">This table was cancelled, so it can't take a result.</div>
+    }
+    else
+    {
+        <div class="alert alert-info" style="max-width:720px" data-testid="photo-note">
+            Post a photo of the final board in the table's thread@(photoRequired ? " (this game asks for one)" : ""). It stays in Discord: this form has no photo upload, and the site never stores photos.
+            @if (table.ThreadId is { } threadId)
+            {
+                <div class="mt-1"><a href="https://discord.com/channels/@GuildId/@threadId" target="_blank" rel="noopener">Open the table's thread in Discord ↗</a></div>
+            }
+        </div>
+
+        <h2 class="h5 mt-3">Who played</h2>
+        <div data-testid="roster">
+            @foreach (var seat in table.Seats)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="played-@seat.UserId" checked="@Played(seat.UserId)"
+                           @onchange="e => TogglePlayer(seat.UserId, e.Value is true)" />
+                    <label class="form-check-label" for="played-@seat.UserId">@NameOf(seat.UserId)@(seat.UserId == UserId ? " (you)" : "")</label>
+                </div>
+            }
+            @foreach (var guestPlayer in draft.Players.Where(p => p.GuestId is not null))
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="guest-@guestPlayer.GuestId" checked @onchange="() => draft.Remove(guestPlayer)" />
+                    <label class="form-check-label" for="guest-@guestPlayer.GuestId">@guestPlayer.Name <span class="badge text-bg-secondary">guest</span></label>
+                </div>
+            }
+        </div>
+
+        @if (CanOrganise)
+        {
+            <div class="mt-2" data-testid="guests">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    @foreach (var guest in guests.Where(g => draft.Players.All(p => p.GuestId != g.Id)))
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => draft.AddGuest(guest.Id, guest.DisplayName)">＋ @guest.DisplayName</button>
+                    }
+                    <input class="form-control form-control-sm" style="max-width:12rem" placeholder="New guest: First L" maxlength="@DisplayNames.MaxLength" @bind="newGuest" @bind:event="oninput" />
+                    <button class="btn btn-outline-primary btn-sm" disabled="@(busy || string.IsNullOrWhiteSpace(newGuest))" @onclick="AddGuestAsync">Add guest</button>
+                </div>
+                <div class="form-text">Guests have no Discord account. Only their typed "First L" name is kept.</div>
+            </div>
+        }
+
+        @if (draft.Players.Count > 0)
+        {
+            <h2 class="h5 mt-4">How it went</h2>
+            @if (Spec.ResultType == GameResultType.SingleWinner)
+            {
+                <p class="text-body-secondary mb-1">Choose the winner.</p>
+            }
+            else if (Spec.ResultType == GameResultType.WinningSide)
+            {
+                <p class="text-body-secondary mb-1">Put each player on the winning side or the other side.</p>
+            }
+            else
+            {
+                <p class="text-body-secondary mb-1">Give each player a finishing place (1 is best; ties share a place).</p>
+            }
+
+            <div data-testid="players">
+                @foreach (var player in draft.Players)
+                {
+                    <div class="card p-2 mb-2" @key="player">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 col-md-3 fw-semibold">@player.Name</div>
+                            <div class="col-6 col-md-3">
+                                @switch (Spec.ResultType)
+                                {
+                                    case GameResultType.SingleWinner:
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="winner" id="winner-@Key(player)" checked="@(draft.Winner == player)" @onchange="() => draft.Winner = player" />
+                                            <label class="form-check-label" for="winner-@Key(player)">Winner</label>
+                                        </div>
+                                        break;
+                                    case GameResultType.WinningSide:
+                                        <label class="form-label meta-mono mb-1" for="side-@Key(player)">Side</label>
+                                        <select id="side-@Key(player)" class="form-select form-select-sm" value="@player.Place" @onchange="e => player.Place = e.Value?.ToString() ?? string.Empty">
+                                            <option value="">(choose)</option>
+                                            <option value="1">Winning side</option>
+                                            <option value="2">Other side</option>
+                                        </select>
+                                        break;
+                                    default:
+                                        <label class="form-label meta-mono mb-1" for="place-@Key(player)">Place</label>
+                                        <input id="place-@Key(player)" class="form-control form-control-sm" type="number" min="1" max="@draft.Players.Count"
+                                               value="@player.Place" @oninput="e => player.Place = e.Value?.ToString() ?? string.Empty" />
+                                        break;
+                                }
+                            </div>
+                            @foreach (var field in draft.PlayerFields)
+                            {
+                                <ReportField Field="field" Values="player.Values" Id="@($"{field.Key}-{Key(player)}")" OnChanged="() => Task.CompletedTask" />
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (draft.TableFields.Any())
+            {
+                <div class="row g-2 mt-1" data-testid="table-fields">
+                    @foreach (var field in draft.TableFields)
+                    {
+                        <ReportField Field="field" Values="draft.TableValues" Id="@($"table-{field.Key}")" OnChanged="() => Task.CompletedTask" />
+                    }
+                </div>
+            }
+        }
+
+        @if (ReporterProblem is not null)
+        {
+            <div class="alert alert-warning mt-3" style="max-width:720px">@ReporterProblem</div>
+        }
+
+        @if (problems.Count > 0 && draft.Players.Count > 0)
+        {
+            <ul class="text-body-secondary mt-3" data-testid="problems">
+                @foreach (var problem in problems)
+                {
+                    <li>@problem.Message</li>
+                }
+            </ul>
+        }
+
+        @if (error is not null)
+        {
+            <div class="alert alert-danger mt-3" style="max-width:720px">@error</div>
+        }
+
+        <div class="mt-3">
+            <button class="btn btn-primary" data-testid="submit" disabled="@(busy || problems.Count > 0 || ReporterProblem is not null)" @onclick="SubmitAsync">Report this result</button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public long GuildId { get; set; }
+
+    [Parameter] public Guid TableId { get; set; }
+
+    private MyTierResponse? tier;
+    private TableDto? table;
+    private GameDto? game;
+    private ReportDraft? draft;
+    private ResultDto? submitted;
+    private List<GuestDto> guests = [];
+    private IReadOnlyDictionary<long, string> names = new Dictionary<long, string>();
+
+    // Re-checked on every draw, so what is still missing is always current.
+    private IReadOnlyList<ValidationProblem> problems => draft?.Validate() ?? [];
+
+    private string newGuest = "";
+    private string? error;
+    private bool busy;
+
+    private long UserId => AuthApi.Session?.UserId ?? 0;
+
+    private GameSpec Spec => game!.Spec;
+
+    private bool CanOrganise => tier is { Verified: true } && tier.Tier >= GameNightsTier.Organiser;
+
+    private bool IsModerator => tier is { Verified: true } && tier.Tier >= GameNightsTier.Moderator;
+
+    private bool photoRequired => game?.Spec.PhotoRequired == true;
+
+    private string NameOf(long userId) => names.GetValueOrDefault(userId, DisplayNames.UnnamedPlayer);
+
+    private static string Key(DraftPlayer player) => player.UserId?.ToString() ?? player.GuestId.ToString()!;
+
+    private bool Played(long userId) => draft!.Players.Any(p => p.UserId == userId);
+
+    private string? ReporterProblem => !CanOrganise && !Played(UserId) && draft!.Players.Count > 0
+        ? "Only someone who played, or an organiser, can report this table's result. Tick yourself in the list above if you played."
+        : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            error = mine.NotFound ? "Game Nights isn't switched on for this server." : mine.Error;
+            return;
+        }
+
+        tier = mine.Value;
+        var tableResult = await GameNights.GetTableAsync(GuildId, TableId);
+        if (!tableResult.Success)
+        {
+            error = tableResult.NotFound ? "That table doesn't exist, or you can't see it." : tableResult.Error;
+            return;
+        }
+
+        table = tableResult.Value;
+        var games = await GameNights.ListGamesAsync(GuildId, includeRetired: true);
+        game = games.Value?.FirstOrDefault(g => g.Id == table!.GameId);
+        if (game is null)
+        {
+            error = games.Error ?? "This table's game is no longer in the library.";
+            return;
+        }
+
+        names = await GameNights.GetNamesAsync(GuildId, table!.Seats.Select(s => s.UserId));
+        draft = new ReportDraft(game.Spec);
+        foreach (var seat in table.Seats)
+        {
+            draft.AddMember(seat.UserId, NameOf(seat.UserId));
+        }
+
+        if (CanOrganise)
+        {
+            guests = (await GameNights.ListGuestsAsync(GuildId)).Value ?? [];
+        }
+    }
+
+    private void TogglePlayer(long userId, bool on)
+    {
+        if (on)
+        {
+            draft!.AddMember(userId, NameOf(userId));
+        }
+        else if (draft!.Players.FirstOrDefault(p => p.UserId == userId) is { } existing)
+        {
+            draft.Remove(existing);
+        }
+    }
+
+    private async Task AddGuestAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await GameNights.CreateGuestAsync(GuildId, newGuest.Trim());
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            guests.Add(result.Value!);
+            draft!.AddGuest(result.Value!.Id, result.Value.DisplayName);
+            newGuest = "";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await GameNights.SubmitResultAsync(GuildId, TableId, draft!.Build());
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            submitted = result.Value;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

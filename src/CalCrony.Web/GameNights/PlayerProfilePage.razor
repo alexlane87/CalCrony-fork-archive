@@ -1,0 +1,146 @@
+@page "/app/guilds/{GuildId:long}/players/{UserId:long}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+@inject AuthApiClient AuthApi
+
+<PageTitle>Player — CalCrony</PageTitle>
+
+@if (disabled)
+{
+    <p class="text-body-secondary">Game Nights isn't switched on for this server.</p>
+}
+else if (error is not null && ratings is null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (ratings is null)
+{
+    <div class="spinner-border text-primary" role="status"></div>
+}
+else
+{
+    <p class="meta-mono text-uppercase mb-2"><a href="/app/guilds/@GuildId/leagues">← Leagues</a></p>
+    <h1 class="h3 mb-3" data-testid="player-name">@name@(UserId == Me ? " (you)" : "")</h1>
+
+    <h2 class="h5">Ratings</h2>
+    @if (ratings.Count == 0)
+    {
+        <p class="text-body-secondary">No rated games yet.</p>
+    }
+
+    @foreach (var rating in ratings)
+    {
+        var history = histories.GetValueOrDefault(rating.GameId) ?? [];
+        <div class="card p-3 mb-3" data-testid="rating" @key="rating.GameId">
+            <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                <span class="fw-semibold">@rating.GameName</span>
+                <span class="fs-4">@rating.Rating</span>
+                <span class="text-body-secondary">rank @rating.Rank of @rating.Players · @rating.GamesPlayed @(rating.GamesPlayed == 1 ? "game" : "games") · @rating.Scope</span>
+            </div>
+            @if (history.Count > 1)
+            {
+                <svg viewBox="0 0 100 30" preserveAspectRatio="none" class="w-100 mt-2" style="height:48px" role="img" aria-label="Rating over time" data-testid="spark">
+                    <polyline fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke" points="@Points(history)" />
+                </svg>
+            }
+            @if (history.Count > 0)
+            {
+                <details class="mt-2">
+                    <summary>Rating history</summary>
+                    <table class="table table-sm mb-0" data-testid="history">
+                        <thead><tr><th>Night</th><th>Place</th><th class="text-end">Before</th><th class="text-end">After</th><th class="text-end">Change</th></tr></thead>
+                        <tbody>
+                            @foreach (var entry in history)
+                            {
+                                <tr @key="entry.ResultId">
+                                    <td><LocalTime Utc="entry.PlayedAtUtc" Format="d MMM yyyy" /></td>
+                                    <td>@(entry.Placement?.ToString() ?? "–")</td>
+                                    <td class="text-end">@RatingPlacements.Display(entry.Before)</td>
+                                    <td class="text-end">@RatingPlacements.Display(entry.After)</td>
+                                    <td class="text-end">@Delta(entry)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </details>
+            }
+        </div>
+    }
+
+    <h2 class="h5 mt-4">Recent results</h2>
+    @if (results.Count == 0)
+    {
+        <p class="text-body-secondary">No results yet.</p>
+    }
+
+    <div class="d-grid gap-2" style="max-width:640px" data-testid="player-results">
+        @foreach (var result in results)
+        {
+            <ResultCard @key="result.Id" Result="result" GuildId="GuildId" UserId="Me" IsModerator="isModerator" OnChanged="r => Replace(r)" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public long GuildId { get; set; }
+
+    [Parameter] public long UserId { get; set; }
+
+    private List<MyRatingDto>? ratings;
+    private Dictionary<Guid, List<RatingHistoryEntryDto>> histories = [];
+    private List<ResultDto> results = [];
+    private bool isModerator;
+    private bool disabled;
+    private string? error;
+    private string name = DisplayNames.UnnamedPlayer;
+
+    private long Me => AuthApi.Session?.UserId ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            disabled = mine.NotFound;
+            error = mine.NotFound ? null : mine.Error;
+            return;
+        }
+
+        isModerator = mine.Value is { Verified: true } && mine.Value.Tier >= GameNightsTier.Moderator;
+        var found = await GameNights.GetRatingsAsync(GuildId, UserId);
+        if (!found.Success)
+        {
+            error = found.Error;
+            return;
+        }
+
+        name = (await GameNights.GetNamesAsync(GuildId, [UserId])).GetValueOrDefault(UserId, DisplayNames.UnnamedPlayer);
+        histories = [];
+        foreach (var rating in found.Value!)
+        {
+            histories[rating.GameId] = (await GameNights.GetRatingHistoryAsync(GuildId, rating.GameId, userId: UserId)).Value ?? [];
+        }
+
+        results = (await GameNights.ListResultsAsync(GuildId, userId: UserId, take: 10)).Value ?? [];
+        ratings = found.Value;
+    }
+
+    private void Replace(ResultDto changed) => results = [.. results.Select(r => r.Id == changed.Id ? changed : r)];
+
+    private static string Delta(RatingHistoryEntryDto entry)
+    {
+        var change = RatingPlacements.Display(entry.After) - RatingPlacements.Display(entry.Before);
+        return change > 0 ? $"+{change}" : change.ToString();
+    }
+
+    // A small line of the rating after each game, scaled to the player's own range.
+    private static string Points(List<RatingHistoryEntryDto> history)
+    {
+        var values = history.Select(h => h.After).ToList();
+        var low = values.Min();
+        var span = Math.Max(values.Max() - low, 1);
+        return string.Join(' ', values.Select((v, i) =>
+            FormattableString.Invariant($"{i * 100.0 / (values.Count - 1):0.##},{28 - (v - low) / span * 26:0.##}")));
+    }
+}

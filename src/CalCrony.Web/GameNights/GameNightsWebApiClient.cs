@@ -303,6 +303,192 @@ public sealed class GameNightsWebApiClient(HttpClient http)
         SendAsync<SetTableDefaultsRequest>(
             http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/table-defaults", new SetTableDefaultsRequest(size), ct), ct);
 
+    // ---- results ----
+
+    /// <summary>The server's most recent results the caller may see, newest first.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">Only this game, or null for all.</param>
+    /// <param name="userId">Only results this member played in, or null for all.</param>
+    /// <param name="status">Only this status, or null for all.</param>
+    /// <param name="take">How many (up to 50).</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The results, or the failure.</returns>
+    public Task<ApiResult<List<ResultDto>>> ListResultsAsync(
+        long guildId, Guid? gameId = null, long? userId = null, ResultStatus? status = null, int take = 25, CancellationToken ct = default)
+    {
+        var query = $"take={take}";
+        query += gameId is { } g ? $"&gameId={g}" : "";
+        query += userId is { } u ? $"&userId={u}" : "";
+        query += status is { } s ? $"&status={(int)s}" : "";
+        return SendAsync<List<ResultDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/results?{query}", ct), ct);
+    }
+
+    /// <summary>The results reported for one table.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The results, or the failure.</returns>
+    public Task<ApiResult<List<ResultDto>>> ListTableResultsAsync(long guildId, Guid tableId, CancellationToken ct = default) =>
+        SendAsync<List<ResultDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/tables/{tableId}/results", ct), ct);
+
+    /// <summary>Reports a result for a table. The board photo is never part of it: it stays in the table's Discord thread.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="tableId">The table.</param>
+    /// <param name="submission">Who played and the answers.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The stored result, or the failure.</returns>
+    public Task<ApiResult<ResultDto>> SubmitResultAsync(long guildId, Guid tableId, ResultSubmission submission, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/tables/{tableId}/results", new SubmitResultRequest(submission), ct), ct);
+
+    /// <summary>Confirms a result as the signed-in player.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="resultId">The result.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The result as it now stands, or the failure.</returns>
+    public Task<ApiResult<ResultDto>> ConfirmResultAsync(long guildId, Guid resultId, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/results/{resultId}/confirm", new AnswerResultRequest(), ct), ct);
+
+    /// <summary>Rejects a result as the signed-in player.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="resultId">The result.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The result as it now stands, or the failure.</returns>
+    public Task<ApiResult<ResultDto>> RejectResultAsync(long guildId, Guid resultId, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/results/{resultId}/reject", new AnswerResultRequest(), ct), ct);
+
+    /// <summary>A moderator confirms or voids a result.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="resultId">The result.</param>
+    /// <param name="action">Confirm or void.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The result as it now stands, or the failure.</returns>
+    public Task<ApiResult<ResultDto>> ResolveResultAsync(long guildId, Guid resultId, ResolveAction action, CancellationToken ct = default) =>
+        SendAsync<ResultDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/results/{resultId}/resolve", new ResolveResultRequest(action), ct), ct);
+
+    // ---- leagues ----
+
+    /// <summary>A game's league table.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="seasonId">A season to show, or null for the running season (else all time).</param>
+    /// <param name="allTime">True to force the all-time table.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The standings, or the failure.</returns>
+    public Task<ApiResult<LeagueStandingsDto>> GetStandingsAsync(
+        long guildId, Guid gameId, Guid? seasonId = null, bool allTime = false, CancellationToken ct = default)
+    {
+        var query = allTime ? "?allTime=true" : seasonId is { } s ? $"?seasonId={s}" : "";
+        return SendAsync<LeagueStandingsDto>(http.GetAsync($"/guilds/{guildId}/game-nights/games/{gameId}/league{query}", ct), ct);
+    }
+
+    /// <summary>One player's rating history in a game, oldest first.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="userId">The member.</param>
+    /// <param name="guestId">A guest, instead of a member.</param>
+    /// <param name="seasonId">A season, or null for the table shown by default.</param>
+    /// <param name="allTime">True to force all time.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The history, or the failure.</returns>
+    public Task<ApiResult<List<RatingHistoryEntryDto>>> GetRatingHistoryAsync(
+        long guildId, Guid gameId, long? userId = null, Guid? guestId = null, Guid? seasonId = null, bool allTime = false, CancellationToken ct = default)
+    {
+        var query = new List<string>();
+        if (userId is { } u) { query.Add($"userId={u}"); }
+        if (guestId is { } gu) { query.Add($"guestId={gu}"); }
+        if (allTime) { query.Add("allTime=true"); }
+        else if (seasonId is { } s) { query.Add($"seasonId={s}"); }
+        var suffix = query.Count == 0 ? "" : "?" + string.Join('&', query);
+        return SendAsync<List<RatingHistoryEntryDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/games/{gameId}/league/history{suffix}", ct), ct);
+    }
+
+    /// <summary>A member's standing in each game's league.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="userId">The member, or null for the signed-in user.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>Their ratings, or the failure.</returns>
+    public Task<ApiResult<List<MyRatingDto>>> GetRatingsAsync(long guildId, long? userId = null, CancellationToken ct = default) =>
+        SendAsync<List<MyRatingDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/leagues/me{(userId is { } u ? $"?userId={u}" : "")}", ct), ct);
+
+    /// <summary>Starts a season (organisers). Starting one ends the running season.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="request">The season.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The season, or the failure.</returns>
+    public Task<ApiResult<SeasonDto>> CreateSeasonAsync(long guildId, Guid gameId, CreateSeasonRequest request, CancellationToken ct = default) =>
+        SendAsync<SeasonDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/games/{gameId}/league/seasons", request, ct), ct);
+
+    /// <summary>Ends a season now (organisers).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="seasonId">The season.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The season, or the failure.</returns>
+    public Task<ApiResult<SeasonDto>> EndSeasonAsync(long guildId, Guid gameId, Guid seasonId, CancellationToken ct = default) =>
+        SendAsync<SeasonDto>(http.PostAsync($"/guilds/{guildId}/game-nights/games/{gameId}/league/seasons/{seasonId}/end", null, ct), ct);
+
+    /// <summary>Rebuilds a game's ratings from its confirmed results (moderators).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>Success, or the failure.</returns>
+    public Task<ApiResult<Unit>> RecomputeLeagueAsync(long guildId, Guid gameId, CancellationToken ct = default) =>
+        SendAsync<Unit>(http.PostAsync($"/guilds/{guildId}/game-nights/games/{gameId}/league/recompute", null, ct), ct);
+
+    // ---- names and guests ----
+
+    private readonly Dictionary<(long Guild, long User), string> names = [];
+
+    /// <summary>"First L" names for members, as the API's name service decides them (never a stored real name, nickname or
+    /// username). Looked up in batches and remembered for this visit; anyone it could not name shows as "Unnamed player".</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="userIds">The members.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>A name for every id asked about.</returns>
+    public async Task<IReadOnlyDictionary<long, string>> GetNamesAsync(long guildId, IEnumerable<long> userIds, CancellationToken ct = default)
+    {
+        var wanted = userIds.Where(id => id > 0).Distinct().ToList();
+        var missing = wanted.Where(id => !names.ContainsKey((guildId, id))).ToList();
+        for (var i = 0; i < missing.Count; i += 100)
+        {
+            var batch = string.Join(',', missing.Skip(i).Take(100));
+            var found = await SendAsync<Dictionary<string, string>>(http.GetAsync($"/guilds/{guildId}/game-nights/names?ids={batch}", ct), ct);
+            foreach (var (key, value) in found.Value ?? [])
+            {
+                if (long.TryParse(key, out var id))
+                {
+                    names[(guildId, id)] = value;
+                }
+            }
+        }
+
+        return wanted.ToDictionary(id => id, id => names.GetValueOrDefault((guildId, id), DisplayNames.UnnamedPlayer));
+    }
+
+    /// <summary>The server's guests (organisers).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The guests, or the failure.</returns>
+    public Task<ApiResult<List<GuestDto>>> ListGuestsAsync(long guildId, CancellationToken ct = default) =>
+        SendAsync<List<GuestDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/guests", ct), ct);
+
+    /// <summary>Adds a guest (organisers).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="displayName">The guest's name as "First L".</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The guest, or the failure.</returns>
+    public Task<ApiResult<GuestDto>> CreateGuestAsync(long guildId, string displayName, CancellationToken ct = default) =>
+        SendAsync<GuestDto>(http.PostAsJsonAsync($"/guilds/{guildId}/game-nights/guests", new CreateGuestRequest(displayName), ct), ct);
+
+    /// <summary>Erases a guest's name on request (moderators).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="guestId">The guest.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>Success, or the failure.</returns>
+    public Task<ApiResult<Unit>> EraseGuestAsync(long guildId, Guid guestId, CancellationToken ct = default) =>
+        SendAsync<Unit>(http.DeleteAsync($"/guilds/{guildId}/game-nights/guests/{guestId}", ct), ct);
+
     private static async Task<ApiResult<T>> SendAsync<T>(Task<HttpResponseMessage> sending, CancellationToken ct)
     {
         HttpResponseMessage response;

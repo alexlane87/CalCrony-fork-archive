@@ -1,0 +1,44 @@
+@* One question on the report form, drawn from the game's own question list: a pick-list, a whole number or text.
+   It writes the answer into the dictionary it is given (the draft's table answers, or one player's). *@
+@using CalCrony.Contracts.GameNights
+
+<div class="@Class">
+    <label class="form-label meta-mono mb-1" for="@Id">@Field.Label@(Field.Required ? " *" : "")</label>
+    @if (Field.Kind == GameFieldKind.PickList)
+    {
+        <select id="@Id" class="form-select form-select-sm" value="@Current" @onchange="e => SetAsync(e.Value?.ToString())">
+            <option value="">(choose)</option>
+            @foreach (var choice in Field.Values ?? [])
+            {
+                <option value="@choice">@choice</option>
+            }
+        </select>
+    }
+    else
+    {
+        <input id="@Id" class="form-control form-control-sm" type="@(Field.Kind == GameFieldKind.Number ? "number" : "text")"
+               step="1" maxlength="@GameRules.TextAnswerLength" value="@Current" @oninput="e => SetAsync(e.Value?.ToString())" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GameFieldSpec Field { get; set; } = default!;
+
+    /// <summary>Where the answer is kept, by question key.</summary>
+    [Parameter, EditorRequired] public Dictionary<string, string> Values { get; set; } = default!;
+
+    [Parameter] public string Id { get; set; } = "";
+
+    [Parameter] public string Class { get; set; } = "col-6 col-md-3";
+
+    /// <summary>Raised after the answer changes, so the page can re-check the report.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string Current => Values.GetValueOrDefault(Field.Key, "");
+
+    private Task SetAsync(string? value)
+    {
+        Values[Field.Key] = value ?? "";
+        return OnChanged.InvokeAsync();
+    }
+}

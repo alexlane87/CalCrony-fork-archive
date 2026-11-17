@@ -1,0 +1,235 @@
+@page "/app/guilds/{GuildId:long}/leagues"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CalCrony.Contracts.GameNights
+@inject GameNightsWebApiClient GameNights
+
+<PageTitle>Leagues — CalCrony</PageTitle>
+
+<p class="meta-mono text-uppercase mb-2"><a href="/app?all=1">← My servers</a></p>
+<GuildHeading GuildId="GuildId" />
+<div class="d-flex align-items-center gap-3 flex-wrap">
+    <h1 class="h3 mb-0">Leagues</h1>
+    <GuildTabs GuildId="GuildId" Active="leagues" />
+</div>
+
+@if (disabled)
+{
+    <p class="text-body-secondary mt-3">Game Nights isn't switched on for this server.</p>
+}
+else if (games is null && error is not null)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+else if (games is null)
+{
+    <div class="spinner-border text-primary mt-3" role="status"></div>
+}
+else if (games.Count == 0)
+{
+    <p class="text-body-secondary mt-3">No game has ratings switched on yet.</p>
+}
+else
+{
+    <div class="row g-2 align-items-end mt-2">
+        <div class="col-12 col-md-4">
+            <label class="form-label meta-mono mb-1" for="league-game">Game</label>
+            <select id="league-game" class="form-select form-select-sm" value="@gameId" @onchange="e => ChooseGameAsync(e.Value?.ToString())">
+                @foreach (var game in games)
+                {
+                    <option value="@game.Id">@game.Spec.Name</option>
+                }
+            </select>
+        </div>
+        @if (standings is { Seasons.Count: > 0 })
+        {
+            <div class="col-12 col-md-4">
+                <label class="form-label meta-mono mb-1" for="league-scope">Table</label>
+                <select id="league-scope" class="form-select form-select-sm" value="@scope" @onchange="e => ChooseScopeAsync(e.Value?.ToString())">
+                    <option value="">Current</option>
+                    <option value="all">All time</option>
+                    @foreach (var season in standings.Seasons)
+                    {
+                        <option value="@season.Id">@season.Name</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+
+    @if (standings is null)
+    {
+        <div class="spinner-border text-primary mt-3" role="status"></div>
+    }
+    else
+    {
+        <h2 class="h5 mt-3">@standings.GameName: @standings.Scope</h2>
+        @if (standings.Rows.Count == 0)
+        {
+            <p class="text-body-secondary">No confirmed games yet. A player joins the table by playing a confirmed game.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle" data-testid="standings">
+                    <thead>
+                        <tr><th>#</th><th>Player</th><th class="text-end">Rating</th><th class="text-end">Games</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in standings.Rows)
+                        {
+                            <tr @key="@($"{row.UserId}{row.GuestId}")">
+                                <td>@row.Rank</td>
+                                <td>
+                                    @if (row.UserId is { } userId)
+                                    {
+                                        <a href="/app/guilds/@GuildId/players/@userId">@row.DisplayName</a>
+                                    }
+                                    else
+                                    {
+                                        @row.DisplayName
+                                    }
+                                </td>
+                                <td class="text-end">@row.Rating</td>
+                                <td class="text-end">@row.GamesPlayed</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="meta-mono text-body-secondary">Built from @standings.GamesCounted confirmed @(standings.GamesCounted == 1 ? "game" : "games"). Only confirmed results at public tables count.</p>
+        }
+
+        @if (CanOrganise)
+        {
+            <div class="card p-3 mt-3" data-testid="season-admin">
+                <h3 class="h6">Seasons</h3>
+                <p class="text-body-secondary mb-2">A season starts everyone at the start rating again; the all-time rating carries on. Starting one ends the season that is running.</p>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <input class="form-control form-control-sm" style="max-width:14rem" placeholder="Season name" maxlength="60" @bind="newSeason" @bind:event="oninput" />
+                    <button class="btn btn-primary btn-sm" disabled="@(busy || string.IsNullOrWhiteSpace(newSeason))" @onclick="StartSeasonAsync">Start a season now</button>
+                    @if (Running is { } running)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => EndSeasonAsync(running.Id)">End "@running.Name"</button>
+                    }
+                    @if (IsModerator)
+                    {
+                        <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="RecomputeAsync">Rebuild ratings</button>
+                    }
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    [Parameter] public long GuildId { get; set; }
+
+    private MyTierResponse? tier;
+    private List<GameDto>? games;
+    private LeagueStandingsDto? standings;
+    private Guid gameId;
+    private string scope = "";
+    private string newSeason = "";
+    private string? error;
+    private bool disabled;
+    private bool busy;
+
+    private bool CanOrganise => tier is { Verified: true } && tier.Tier >= GameNightsTier.Organiser;
+
+    private bool IsModerator => tier is { Verified: true } && tier.Tier >= GameNightsTier.Moderator;
+
+    private SeasonDto? Running => standings?.Seasons.FirstOrDefault(s => s.StartsAtUtc <= DateTimeOffset.UtcNow && (s.EndsAtUtc is null || s.EndsAtUtc > DateTimeOffset.UtcNow));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mine = await GameNights.GetMyTierAsync(GuildId);
+        if (!mine.Success)
+        {
+            disabled = mine.NotFound;
+            error = mine.NotFound ? null : mine.Error;
+            return;
+        }
+
+        tier = mine.Value;
+        var result = await GameNights.ListGamesAsync(GuildId);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        games = [.. result.Value!.Where(g => g.Active && g.Spec.RatingEnabled)];
+        if (games.Count > 0)
+        {
+            gameId = games[0].Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task ChooseGameAsync(string? value)
+    {
+        if (Guid.TryParse(value, out var id))
+        {
+            gameId = id;
+            scope = "";
+            await LoadAsync();
+        }
+    }
+
+    private async Task ChooseScopeAsync(string? value)
+    {
+        scope = value ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        standings = null;
+        var result = scope == "all"
+            ? await GameNights.GetStandingsAsync(GuildId, gameId, allTime: true)
+            : await GameNights.GetStandingsAsync(GuildId, gameId, seasonId: Guid.TryParse(scope, out var season) ? season : null);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        standings = result.Value;
+    }
+
+    private async Task StartSeasonAsync() =>
+        await RunAsync(() => GameNights.CreateSeasonAsync(GuildId, gameId, new CreateSeasonRequest(newSeason.Trim())), () => newSeason = "");
+
+    private async Task EndSeasonAsync(Guid seasonId) => await RunAsync(() => GameNights.EndSeasonAsync(GuildId, gameId, seasonId));
+
+    private async Task RecomputeAsync() => await RunAsync(() => GameNights.RecomputeLeagueAsync(GuildId, gameId));
+
+    private async Task RunAsync<T>(Func<Task<CalCrony.Web.Api.ApiResult<T>>> action, Action? after = null)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await action();
+            if (!result.Success)
+            {
+                error = result.Error;
+                return;
+            }
+
+            after?.Invoke();
+            scope = "";
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

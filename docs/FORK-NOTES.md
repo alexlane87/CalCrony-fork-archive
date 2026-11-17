@@ -665,3 +665,51 @@ game. Rating a game that is later switched to "ratings off" empties its league (
 seasons, the database constraints, retention) need Docker and run in CI.
 
 **Core touch points added this step.** The generated migration + snapshot only.
+
+
+---
+
+# Step 10: role-aware website
+
+**Decision that differs from the plan: no photo upload on the website.** The plan had the report form upload the board photo to the API, which
+would forward it to the thread through the bot and discard it. That cannot be done without breaking a rule: the API never calls Discord (ADR
+0001/0004), so anything for the bot goes through the delivery outbox, which is a database table (rows live 90 days). A photo queued there would sit in
+the database, against "nothing is written to disk or the database". Three ways out were put to the owner (hold the bytes in server memory and let
+the bot fetch them; no upload; a short-lived database blob). **The owner chose no upload.** The report form therefore has no file field; it tells
+the reporter to post the photo in the table's thread (with a link), exactly as the Discord flow does ("the reporter's word", Step 8), and the game's
+"photo required" setting is shown as a note. The plan's "no residue" test is replaced by two that pin the same promise: no report contract has a
+property that could carry a photo, link or file, and the report page renders no file input and sends no photo field.
+
+**Pages** (all under the guild, in `CalCrony.Web/GameNights/`, no core page edited beyond the seams below):
+- **Leagues** (`/app/guilds/{id}/leagues`): game picker, current / all-time / per-season table, names linked to the player page. Organisers get the
+  season controls (start now, end the running one); moderators also get "Rebuild ratings".
+- **Results** (`/results`): recent results (filter by game, "only mine"), a "Waiting for you" strip for results the viewer still has to answer, the
+  guest list for organisers and "Erase name" for moderators. Members see none of the guest controls and the page does not even ask for the list.
+- **Player profile** (`/players/{userId}`): name, rating per game with rank, a small rating line, the history table (before, after, change) and recent results.
+- **Report a result** (`/tables/{id}/report`), linked from the table page: built from the game's own question list (ranked place, single winner or winning side;
+  pick-lists, numbers and text, per player or per table), seated players ticked by default, guests added by organisers. The shared `ResultValidator` runs on every
+  keystroke so the button stays off while anything would be refused; `ReportDraft` holds the form state and produces the same `ResultSubmission` the bot sends
+  (single-winner games send only the winner's place, as the bot does). A member who is not in the list and is not an organiser is told they cannot report; the API
+  enforces it either way.
+- **Result card**: place, name and score, extra answers, status; Confirm and Reject for a player who still has to answer, Accept as reported and Void for a moderator;
+  a nickname nudge for a player with no usable "First L".
+- **Table page**: "Report a result" link and the table's results.
+- Tabs gain **Leagues** and **Results**. Every member sees every pill; pages show members the read-only view (the API decides what is allowed).
+
+**Names.** Every page now shows people through the name service: `GameNightsWebApiClient.GetNamesAsync` asks `GET names` in batches of 100 and remembers answers for
+the visit, and anyone it cannot name shows as "Unnamed player". The table card (seats, host picker) and the games panel (teachers, everyone's answers) no longer show
+`user {id}`.
+
+**One API addition:** `GET /guilds/{id}/game-nights/results?gameId&userId&status&take` (member tier, newest first, take capped at 50): the result history page needs a
+guild-wide list. Each row passes the same table-visibility check as reading it directly, so a result at a table the caller cannot see never appears (tested, with the filters and
+that another server's results never show). No schema change.
+
+**Also fixed.** Step 9's dev run was red: the rating history ordered two games at the same night by a random event id. It now orders by night, then when the result was
+submitted, then result id, the same order the engine replays in (PR #15).
+
+**Tests.** `ResultsWebComponentTests` (draft rules; the report form with and without organiser powers, the guard on a member who did not play, the cancelled table, the
+submit request; result cards for each tier; history, guests and erase; leagues and seasons per tier; the profile; the table page; tabs). The Api test for the new route needs Docker and runs in CI.
+
+**Not exercised against real Discord or a browser.** The pages were checked through component tests only; open Leagues, Results and a table's report form on the test stack.
+
+**Core touch points added this step.** None: everything is in the extension's folders.
