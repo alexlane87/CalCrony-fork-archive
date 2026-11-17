@@ -39,6 +39,31 @@ public sealed class GameNightsApiClient(HttpClient http)
         SendAsync<EventVenueDto>(
             http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue/areas/{areaId}", new SetEventAreaRequest(on), ct), ct);
 
+    /// <summary>The members the API wants names for.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The members, or a display-ready error.</returns>
+    public Task<ApiResult<WantedNamesResponse>> GetWantedNamesAsync(long guildId, CancellationToken ct = default) =>
+        SendAsync<WantedNamesResponse>(http.GetAsync($"/guilds/{guildId}/game-nights/member-names/wanted", ct), ct);
+
+    /// <summary>Pushes "First L" names (only the derived form).</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="members">The names.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>Success, or a display-ready error.</returns>
+    public async Task<ApiResult<bool>> PutMemberNamesAsync(long guildId, IReadOnlyList<MemberNameDto> members, CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/member-names", new PutMemberNamesRequest(members), ct);
+            return response.IsSuccessStatusCode ? new ApiResult<bool>(true, null) : new ApiResult<bool>(false, $"API error {(int)response.StatusCode}.");
+        }
+        catch (HttpRequestException ex)
+        {
+            return new ApiResult<bool>(false, $"API unreachable: {ex.Message}");
+        }
+    }
+
     /// <summary>A member's answers for a night.</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>
     /// <param name="eventId">The night.</param>

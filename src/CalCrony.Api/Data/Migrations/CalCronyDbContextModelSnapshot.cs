@@ -1231,6 +1231,29 @@ namespace CalCrony.Api.Data.Migrations
                     b.ToTable("GameNightGameTypeLinks");
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightGuest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("Erased")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId");
+
+                    b.ToTable("GameNightGuests");
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightInvite", b =>
                 {
                     b.Property<int>("Scope")
@@ -1247,6 +1270,141 @@ namespace CalCrony.Api.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("GameNightInvites");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightMemberName", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("Left")
+                        .HasColumnType("boolean");
+
+                    b.Property<Instant>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("GuildId", "UserId");
+
+                    b.ToTable("GameNightMemberNames");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Instant?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ReporterUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Instant>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("GameNightResults");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResultConfirmation", b =>
+                {
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Instant>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ResultId", "UserId");
+
+                    b.ToTable("GameNightResultConfirmations");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResultPlayer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("GuestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Placement")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("Score")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ValuesJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuestId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ResultId", "GuestId")
+                        .IsUnique();
+
+                    b.HasIndex("ResultId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("GameNightResultPlayers", t =>
+                        {
+                            t.HasCheckConstraint("CK_GameNightResultPlayers_OnePlayer", "(\"UserId\" IS NULL) <> (\"GuestId\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResultValue", b =>
+                {
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("ResultId", "Key");
+
+                    b.ToTable("GameNightResultValues");
                 });
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightSignal", b =>
@@ -1331,6 +1489,8 @@ namespace CalCrony.Api.Data.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("GuestId");
 
                     b.HasIndex("UserId");
 
@@ -1541,6 +1701,53 @@ namespace CalCrony.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResult", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightGame", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CalCrony.Api.GameNights.GameNightTable", null)
+                        .WithMany()
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResultConfirmation", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightResult", null)
+                        .WithMany("Confirmations")
+                        .HasForeignKey("ResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResultPlayer", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightGuest", null)
+                        .WithMany()
+                        .HasForeignKey("GuestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CalCrony.Api.GameNights.GameNightResult", null)
+                        .WithMany("Players")
+                        .HasForeignKey("ResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResultValue", b =>
+                {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightResult", null)
+                        .WithMany("Values")
+                        .HasForeignKey("ResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightSignal", b =>
                 {
                     b.HasOne("CalCrony.Api.Data.Event", null)
@@ -1573,6 +1780,11 @@ namespace CalCrony.Api.Data.Migrations
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTableSeat", b =>
                 {
+                    b.HasOne("CalCrony.Api.GameNights.GameNightGuest", null)
+                        .WithMany()
+                        .HasForeignKey("GuestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CalCrony.Api.GameNights.GameNightTable", null)
                         .WithMany("Seats")
                         .HasForeignKey("TableId")
@@ -1620,6 +1832,15 @@ namespace CalCrony.Api.Data.Migrations
                     b.Navigation("Fields");
 
                     b.Navigation("TypeLinks");
+                });
+
+            modelBuilder.Entity("CalCrony.Api.GameNights.GameNightResult", b =>
+                {
+                    b.Navigation("Confirmations");
+
+                    b.Navigation("Players");
+
+                    b.Navigation("Values");
                 });
 
             modelBuilder.Entity("CalCrony.Api.GameNights.GameNightTable", b =>

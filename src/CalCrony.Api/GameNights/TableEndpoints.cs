@@ -369,7 +369,7 @@ public static class TableEndpoints
 
     // ---- helpers ----
 
-    private static async Task<(GameNightsTier Tier, long UserId)> WhoAsync(
+    internal static async Task<(GameNightsTier Tier, long UserId)> WhoAsync(
         HttpContext context, TierResolver tiers, long guildId, CancellationToken cancellationToken) =>
         ((await tiers.ResolveAsync(context.User, guildId, cancellationToken)).Tier, context.User.WebUserId() ?? 0);
 
@@ -380,10 +380,10 @@ public static class TableEndpoints
 
     private static bool IsLive(Event ev) => ev.Status is EventStatus.Scheduled or EventStatus.Started;
 
-    private static Task LockEventAsync(CalCronyDbContext db, Guid eventId, CancellationToken cancellationToken) =>
+    internal static Task LockEventAsync(CalCronyDbContext db, Guid eventId, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlAsync($"""SELECT "Id" FROM "Events" WHERE "Id" = {eventId} FOR UPDATE""", cancellationToken);
 
-    private static async Task<GameNightTable?> FindTableAsync(
+    internal static async Task<GameNightTable?> FindTableAsync(
         CalCronyDbContext db, long guildId, Guid tableId, bool track, CancellationToken cancellationToken)
     {
         var query = db.GameNightTables.Include(t => t.Seats).AsQueryable();
@@ -400,7 +400,7 @@ public static class TableEndpoints
 
     /// <summary>A table is visible when its night is, and the table itself is public, or the caller is
     /// sitting at it or invited, or their tier reaches it. Hidden is reported as not found.</summary>
-    private static async Task<bool> CanSeeTableAsync(
+    internal static async Task<bool> CanSeeTableAsync(
         CalCronyDbContext db, GameNightTable table, long userId, GameNightsTier tier, CancellationToken cancellationToken)
     {
         if (!await VisibilityFilter.CanSeeEventAsync(db, table.EventId, userId, tier, cancellationToken))
