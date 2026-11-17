@@ -510,3 +510,65 @@ panel/limit checks). The Api tests (answers, replace, roster, visibility, thrott
 **Core touch points added this step.** `Contracts/Events.cs` (`EventDto.GameNights`), `Api/Endpoints/EventEndpoints.cs` (one call in
 the single-event DTO helper), `Bot/EventEmbedBuilder.cs` (budget, field, button hooks), `Web/Pages/App/EventDetail.razor`
 (one `<EventGamesPanel>`), and the generated migration + snapshot.
+
+---
+
+# Step 7: result reporting, backend
+
+**What landed.** Migration `GameNightsResults` (additive): `GameNightResults`, `GameNightResultPlayers` (a member by Discord
+id OR a guest; a check constraint makes it exactly one), `GameNightResultValues` (table-wide answers),
+`GameNightResultConfirmations`, `GameNightGuests`, `GameNightMemberNames`, plus the foreign key on table seats' `GuestId`
+that Step 4 left open. A new core delivery type, `ResultDisputed = 21`, handled through the poller seam.
+
+**Names: the decision, and how it differs from the plan.** The plan said member names are not stored. The owner has said names
+are fine to keep (people give names for tournaments anyway), so the rule now is: **only the derived "First L" is ever
+stored, only for people who take part, never a nickname, username or anything else from Discord.**
+- The API cannot read Discord (ADR 0001/0004), so the bot works "First L" out of each participant's server nickname
+  (`DisplayNames.FromNickname`, case-insensitive: "alex pearson" gives "Alex P"; hyphens and apostrophes handled; "Anne de
+  Smith" gives "Anne S") and pushes **only that**. With no server nickname it may use the member's own chosen global
+  display name, never the username. A single word, digits, emoji or a pipe and a place do not match and are pushed as null.
+  The API itself refuses to store anything that is not exactly the derived form, so a raw nickname cannot get in however
+  the bot changes (tested).
+- `MemberNameSyncService` (bot, every 10 minutes, only when Game Nights is on) asks the API who it needs names for (people at
+  tables, in results or answering, with no name or a stale one: a matched name is refreshed after 12 hours, an unmatched one
+  after an hour so a fixed nickname is picked up quickly), looks them up, and pushes. A member who is gone is reported as left.
+- `NameService` is the one place a name is decided: left gives "Former member"; a stored name; a one-off name typed for a
+  single report (used for that response only and never stored, validated as First L); otherwise "Unnamed player", and the
+  member is listed in the response's `UnnamedUserIds` so the bot can nudge them to fix their nickname (the nudge itself is
+  Step 8, in the report flow). Everyone in the server can read these names (they are what Discord already shows); guests are
+  shown by their typed name.
+- **Guests** (people with no Discord account): organisers add them (`First L` only), they can appear in results, and a
+  moderator can erase one on request: the name becomes "Former guest" and the row stays so results keep their shape.
+- The privacy test checks the schema: no column in any Game Nights table is named photo, image, url, link, blob, file, nick,
+  username or avatar, and the only name columns are the guest's typed name and the derived member name.
+- **Needs the privacy page updated** before this is switched on for prod: Game Nights keeps a member's "First L" (derived
+  from their server nickname) and a Discord id against results. Owner agreed this is fine; the text is not written yet.
+
+**Reporting and confirming.** `POST tables/{t}/results` (a member who played, or an organiser; the bot names the reporter),
+checked by the Step 3 validator against the table's game (player count, placements, required answers, pick lists, unique
+answers). Members are stored by id only; the score is the answer to the question keyed `score`; other answers are kept as
+small JSON, table-wide ones as rows. **No photo field or link exists anywhere**: the board photo stays in Discord and never
+reaches the API. A table has at most one result that is pending, confirmed or disputed at a time; a voided one frees it.
+- *Pending → Confirmed* when enough of the members who played have confirmed. The reporter counts as confirming if they
+  played; guests cannot confirm; a result with no members (only guests) is confirmed at once.
+  **The rule is configurable: `GameNights:ConfirmMode` = `All` (default) or `Majority` (more than half).** This is the open
+  question from the plan; I defaulted to All with a moderator override. Confirmed marks the table Played.
+- *Rejected* by any player → Disputed, and **one** `ResultDisputed` is queued (not again on further rejections) naming the
+  roles mapped to organiser, moderator or admin; the bot posts it in the table's thread (or the night's channel), pinging
+  only the rejector and those roles. A confirm cannot override a dispute.
+- A **moderator** can confirm a pending or disputed result, or void any result; voiding a confirmed one puts the table back to
+  Open so it can report again.
+- Reporting is allowed for any table that is not cancelled, whatever state the night is in.
+
+**Routes** (`/guilds/{id}/game-nights/...`): `GET|POST tables/{t}/results`, `GET results/{r}`, `POST results/{r}/confirm|reject`
+(members who played; the bot names them), `POST results/{r}/resolve` (moderator); `PUT member-names`,
+`GET member-names/wanted` (bot only), `GET names?ids=` (member); `GET|POST guests` (organiser), `DELETE guests/{g}`
+(moderator, erases the name).
+
+**Not done.** The Discord report flow, photo prompt, reminders and the nickname nudge are Step 8. The web still shows people
+as "user {id}"; wiring the name routes into every page is Step 10. League effects are Step 9 (only confirmed results count).
+
+**Verification.** Local: solution builds; Bot 500 tests pass. The Api tests (lifecycle, validation, who may report or answer,
+names, guests, the schema privacy check, the majority rule) need Docker and run in CI.
+
+**Core touch points added this step.** `Contracts/Deliveries.cs` (one enum value), and the generated migration + snapshot.

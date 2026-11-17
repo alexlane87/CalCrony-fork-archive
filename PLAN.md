@@ -175,7 +175,7 @@ Tests: aggregates; changing a signal replaces the old one; throttled update fire
 
 Done when: several test users mark Arcs and Root, and the event post shows teachers and fresh-player counts.
 
-### [ ] Step 7: Result reporting, backend
+### [x] Step 7: Result reporting, backend
 
 Goal: store results safely with the name and photo decisions applied.
 

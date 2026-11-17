@@ -192,3 +192,131 @@ public class GameNightTableSeat
     /// <summary>The order people sat down in.</summary>
     public int SeatOrder { get; set; }
 }
+
+/// <summary>A reported result for a table. A table has at most one result that is pending, confirmed or
+/// disputed at a time; a voided one frees the table to report again. Nothing here holds a photo or a link to one.</summary>
+public class GameNightResult
+{
+    /// <summary>The result id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The table.</summary>
+    public Guid TableId { get; set; }
+
+    /// <summary>The game (the table's game when it was reported).</summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>Where it stands.</summary>
+    public ResultStatus Status { get; set; }
+
+    /// <summary>Who reported it (a Discord user id).</summary>
+    public long ReporterUserId { get; set; }
+
+    /// <summary>When it was reported.</summary>
+    public NodaTime.Instant SubmittedAt { get; set; }
+
+    /// <summary>When it was confirmed.</summary>
+    public NodaTime.Instant? ConfirmedAt { get; set; }
+
+    /// <summary>Who played.</summary>
+    public List<GameNightResultPlayer> Players { get; set; } = [];
+
+    /// <summary>The table-wide answers.</summary>
+    public List<GameNightResultValue> Values { get; set; } = [];
+
+    /// <summary>The players' answers to it.</summary>
+    public List<GameNightResultConfirmation> Confirmations { get; set; } = [];
+}
+
+/// <summary>One player in a result: a member (Discord id) or a guest. Only the id is stored for a member; the
+/// name is worked out when shown.</summary>
+public class GameNightResultPlayer
+{
+    /// <summary>The row id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The result.</summary>
+    public Guid ResultId { get; set; }
+
+    /// <summary>A Discord member.</summary>
+    public long? UserId { get; set; }
+
+    /// <summary>A guest.</summary>
+    public Guid? GuestId { get; set; }
+
+    /// <summary>Finishing place.</summary>
+    public int? Placement { get; set; }
+
+    /// <summary>The final score (the answer to the question keyed "score").</summary>
+    public long? Score { get; set; }
+
+    /// <summary>The other per-player answers as a small JSON object.</summary>
+    public string? ValuesJson { get; set; }
+}
+
+/// <summary>A table-wide answer in a result (map, deck, landmarks, round the game ended).</summary>
+public class GameNightResultValue
+{
+    /// <summary>The result.</summary>
+    public Guid ResultId { get; set; }
+
+    /// <summary>The question key.</summary>
+    public string Key { get; set; } = "";
+
+    /// <summary>The answer.</summary>
+    public string Value { get; set; } = "";
+}
+
+/// <summary>A member's answer to a result.</summary>
+public class GameNightResultConfirmation
+{
+    /// <summary>The result.</summary>
+    public Guid ResultId { get; set; }
+
+    /// <summary>The member.</summary>
+    public long UserId { get; set; }
+
+    /// <summary>Their answer.</summary>
+    public ConfirmationDecision Decision { get; set; }
+
+    /// <summary>When they answered.</summary>
+    public NodaTime.Instant At { get; set; }
+}
+
+/// <summary>Someone with no Discord account who played. The typed "First L" name is the only personal detail kept,
+/// and it can be erased on request (the row stays so results keep their shape).</summary>
+public class GameNightGuest
+{
+    /// <summary>The guest id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The Discord guild (server) id.</summary>
+    public long GuildId { get; set; }
+
+    /// <summary>The typed name, or "Former guest" once erased.</summary>
+    public string DisplayName { get; set; } = "";
+
+    /// <summary>True once the name has been erased.</summary>
+    public bool Erased { get; set; }
+}
+
+/// <summary>A member's "First L" name as the bot worked it out from their server nickname. Only people who sit at
+/// tables or appear in results get one, and only the derived form is stored: never the nickname, username or
+/// anything else from Discord.</summary>
+public class GameNightMemberName
+{
+    /// <summary>The Discord guild (server) id.</summary>
+    public long GuildId { get; set; }
+
+    /// <summary>The member.</summary>
+    public long UserId { get; set; }
+
+    /// <summary>"First L", or null when their nickname does not follow the convention.</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>True once the member has left the server.</summary>
+    public bool Left { get; set; }
+
+    /// <summary>When the bot last looked.</summary>
+    public NodaTime.Instant UpdatedAt { get; set; }
+}

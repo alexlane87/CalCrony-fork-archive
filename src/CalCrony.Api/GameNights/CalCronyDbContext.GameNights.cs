@@ -19,5 +19,11 @@ public partial class CalCronyDbContext
     public DbSet<GameNightGameTypeLink> GameNightGameTypeLinks => Set<GameNightGameTypeLink>();
     public DbSet<GameNightTable> GameNightTables => Set<GameNightTable>();
     public DbSet<GameNightSignal> GameNightSignals => Set<GameNightSignal>();
+    public DbSet<GameNightResult> GameNightResults => Set<GameNightResult>();
+    public DbSet<GameNightResultPlayer> GameNightResultPlayers => Set<GameNightResultPlayer>();
+    public DbSet<GameNightResultValue> GameNightResultValues => Set<GameNightResultValue>();
+    public DbSet<GameNightResultConfirmation> GameNightResultConfirmations => Set<GameNightResultConfirmation>();
+    public DbSet<GameNightGuest> GameNightGuests => Set<GameNightGuest>();
+    public DbSet<GameNightMemberName> GameNightMemberNames => Set<GameNightMemberName>();
     public DbSet<GameNightTableSeat> GameNightTableSeats => Set<GameNightTableSeat>();
 }

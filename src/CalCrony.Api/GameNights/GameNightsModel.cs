@@ -116,6 +116,55 @@ public static class GameNightsModel
             e.HasIndex(s => new { s.TableId, s.UserId }).IsUnique();
             e.HasIndex(s => new { s.TableId, s.GuestId }).IsUnique();
             e.HasIndex(s => s.UserId);
+            e.HasOne<GameNightGuest>().WithMany().HasForeignKey(s => s.GuestId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GameNightGuest>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.DisplayName).HasMaxLength(DisplayNames.MaxLength);
+            e.HasIndex(x => x.GuildId);
+        });
+
+        modelBuilder.Entity<GameNightMemberName>(e =>
+        {
+            e.HasKey(x => new { x.GuildId, x.UserId });
+            e.Property(x => x.DisplayName).HasMaxLength(DisplayNames.MaxLength);
+        });
+
+        modelBuilder.Entity<GameNightResult>(e =>
+        {
+            e.Property(r => r.Id).ValueGeneratedNever();
+            // A table with a result keeps it (cancelled tables are not deleted); a game with results is retired, never deleted.
+            e.HasOne<GameNightTable>().WithMany().HasForeignKey(r => r.TableId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<GameNightGame>().WithMany().HasForeignKey(r => r.GameId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(r => r.TableId);
+            e.HasMany(r => r.Players).WithOne().HasForeignKey(p => p.ResultId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(r => r.Values).WithOne().HasForeignKey(v => v.ResultId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(r => r.Confirmations).WithOne().HasForeignKey(c => c.ResultId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GameNightResultPlayer>(e =>
+        {
+            e.Property(p => p.Id).ValueGeneratedNever();
+            e.Property(p => p.ValuesJson).HasMaxLength(2000);
+            e.ToTable(t => t.HasCheckConstraint("CK_GameNightResultPlayers_OnePlayer", "(\"UserId\" IS NULL) <> (\"GuestId\" IS NULL)"));
+            e.HasOne<GameNightGuest>().WithMany().HasForeignKey(p => p.GuestId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(p => new { p.ResultId, p.UserId }).IsUnique();
+            e.HasIndex(p => new { p.ResultId, p.GuestId }).IsUnique();
+            e.HasIndex(p => p.UserId);
+        });
+
+        modelBuilder.Entity<GameNightResultValue>(e =>
+        {
+            e.HasKey(v => new { v.ResultId, v.Key });
+            e.Property(v => v.Key).HasMaxLength(GameRules.KeyLength);
+            e.Property(v => v.Value).HasMaxLength(GameRules.TextAnswerLength);
+        });
+
+        modelBuilder.Entity<GameNightResultConfirmation>(e =>
+        {
+            e.HasKey(c => new { c.ResultId, c.UserId });
         });
 
         modelBuilder.Entity<GameNightInvite>(e =>
