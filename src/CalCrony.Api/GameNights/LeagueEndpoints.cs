@@ -83,9 +83,14 @@ public static class LeagueEndpoints
             return Results.NotFound();
         }
 
-        var events = await db.GameNightRatingEvents.AsNoTracking()
-            .Where(e => e.LeagueId == league.Id && e.SeasonId == scope.Value.SeasonId && e.UserId == subject && e.GuestId == guestId)
-            .OrderBy(e => e.PlayedAt).ThenBy(e => e.Id)
+        // Same order the engine replays in (night, then when it was reported, then id), so two games at one night stay in the order
+        // they were played instead of falling back to a random event id.
+        var events = await (
+            from e in db.GameNightRatingEvents.AsNoTracking()
+            join r in db.GameNightResults.AsNoTracking() on e.ResultId equals r.Id
+            where e.LeagueId == league.Id && e.SeasonId == scope.Value.SeasonId && e.UserId == subject && e.GuestId == guestId
+            orderby e.PlayedAt, r.SubmittedAt, r.Id
+            select e)
             .ToListAsync(cancellationToken);
         return Results.Ok(events.Select(e => new RatingHistoryEntryDto(e.ResultId, e.PlayedAt.ToDateTimeOffset(), e.Placement, e.Before, e.After)).ToList());
     }
