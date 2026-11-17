@@ -204,7 +204,7 @@ Tests: a scripted run through the flow for each game with a fake Discord client;
 
 Done when: in the test server, a table of four can report a Root game, the others confirm, and the result appears as confirmed.
 
-### [ ] Step 9: Leagues and ratings
+### [x] Step 9: Leagues and ratings
 
 Goal: open-ended per-game leagues with optional seasons.
 

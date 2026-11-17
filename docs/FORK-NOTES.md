@@ -619,3 +619,49 @@ cannot be added in the Discord flow (website, Step 10). The nickname nudge is a 
 **Not exercised against real Discord:** the user-select, the form and the buttons; try Report game on the test server.
 
 **Core touch points added this step.** `Contracts/Deliveries.cs` (three enum values), the generated migration + snapshot.
+
+---
+
+# Step 9: leagues and ratings
+
+**What landed.** Migration `GameNightsLeagues` (additive): `GameNightLeagues` (one per game, open-ended, made the first time a rated result
+counts), `GameNightSeasons`, `GameNightPlayerRatings`, `GameNightRatingEvents` (the league entries: before and after for every player of every
+counted game), and an `InLeague` flag on `GameNightTables` and `GameNightEventExtensions`.
+
+**The rating.** `PairwiseElo` behind `IRatingScheme` (Contracts, so the scheme can be swapped later in one place, `LeagueEngine.Scheme`):
+`E(i,j) = 1/(1+10^((Rj-Ri)/400))`, `S` = 1 / 0.5 / 0, `ΔRi = K/(N-1) × Σ(S - E)`. Start 1000 and K 32, both per game. Checked against hand-worked
+examples: two equal players move 16 (ordinary Elo); 1000 beating 1200 gains 24.3119; four equal players finishing 1-2-3-4 move +16, +5.33, -5.33,
+-16; ties between equals change nothing; and the total across a game is always conserved. **Winner-only games** (decided here, as the plan left it
+open): the winner is rated against everyone and the others are treated as **tied with each other**, so they neither gain nor lose from one another.
+Winning-side games tie players on the same side. Ratings are stored exactly and shown rounded.
+
+**What counts.** A result counts when it is **confirmed**, its game has ratings on, its table is **public** and its night is **public**. Nothing else
+ever reaches a league. **The database enforces the public rule**: tables and nights carry `InLeague`, with check constraints
+`Visibility = 0 OR NOT InLeague`, so making a counted table or night non-public fails in the database whatever any code does (tested for both). When a
+result is voided the flag clears and the table can be made private again.
+
+**How ratings are produced.** By **replaying** every counted result of the game in order (night, then when it was reported) through the scheme, inside
+the request's transaction and under a lock on the game. One way to get a rating, so **voiding or correcting a confirmed result is just a rebuild**
+(tested: voiding the middle of three games gives exactly the ratings of the other two, in order; voiding all empties the table). It runs when a result
+becomes confirmed (the last confirmation, an immediate confirmation, a moderator's confirm), when a confirmed one is voided, when a season starts or
+ends, and on demand (moderator). Players join by playing: a player's first counted result creates their rating at the game's start rating.
+Hundreds or thousands of results replay in milliseconds; if a league ever outgrew that, the engine is the one place to make it incremental.
+
+**Seasons.** Optional. Each result is rated into the all-time rating AND into the season its night falls in, if any; a season starts everyone fresh,
+so the all-time rating carries on while the season starts at 1000 (tested: Autumn and Winter each show 1016 for one game; all-time shows 1030.53).
+Starting a season ends the one running at that moment; overlaps are refused. The table shown by default is the running season, else all-time.
+
+**Routes** (`/guilds/{id}/game-nights/...`): `GET games/{g}/league[?seasonId|allTime]` (member), `GET games/{g}/league/history[?userId|guestId]`,
+`GET leagues/me[?userId]`, `POST games/{g}/league/seasons`, `POST .../seasons/{s}/end` (organiser), `POST .../recompute` (moderator).
+**Bot:** `/league standings game [all-time]` and `/league rating`. Names are the First L ones (guests by their typed name).
+
+**Retention.** The purge only touches the tables it lists, so results, players, ratings, rating events and leagues are exempt by omission. A test now
+pins it: league data is built, the purge runs with a clock 800 days ahead, and every count is unchanged.
+
+**Not done.** The website's league pages are Step 10. Per-game K and start rating are in the game definition but have no editor yet beyond editing the
+game. Rating a game that is later switched to "ratings off" empties its league (the results stay).
+
+**Verification.** Local: solution builds; Bot 535 tests and the 13 pure Elo tests pass. The Api league tests (the headline three-game standings, voids,
+seasons, the database constraints, retention) need Docker and run in CI.
+
+**Core touch points added this step.** The generated migration + snapshot only.

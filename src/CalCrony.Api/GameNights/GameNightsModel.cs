@@ -14,6 +14,9 @@ public static class GameNightsModel
     /// <summary>Longest note about a game's role.</summary>
     public const int RoleNoteLength = 300;
 
+    /// <summary>Longest season name.</summary>
+    public const int SeasonNameLength = 60;
+
     /// <summary>Configures the Game Nights entities.</summary>
     /// <param name="modelBuilder">The EF model builder.</param>
     public static void Apply(ModelBuilder modelBuilder)
@@ -31,6 +34,8 @@ public static class GameNightsModel
             // A venue in use is retired, not deleted; the endpoint refuses a delete (409) first.
             e.HasOne<GameNightVenue>().WithMany().HasForeignKey(x => x.VenueId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.VenueId);
+            // A night that is not public can never carry a league entry.
+            e.ToTable(t => t.HasCheckConstraint("CK_GameNightEventExtensions_LeagueNeedsPublic", "\"Visibility\" = 0 OR NOT \"InLeague\""));
         });
 
         modelBuilder.Entity<GameNightVenue>(e =>
@@ -95,6 +100,51 @@ public static class GameNightsModel
             e.HasIndex(t => new { t.EventId, t.Number }).IsUnique();
             e.HasIndex(t => t.GameId);
             e.HasMany(t => t.Seats).WithOne().HasForeignKey(s => s.TableId).OnDelete(DeleteBehavior.Cascade);
+            // A table that is not public can never carry a league entry: the database refuses it, whatever the code does.
+            e.ToTable(t => t.HasCheckConstraint("CK_GameNightTables_LeagueNeedsPublic", "\"Visibility\" = 0 OR NOT \"InLeague\""));
+        });
+
+        modelBuilder.Entity<GameNightLeague>(e =>
+        {
+            e.Property(l => l.Id).ValueGeneratedNever();
+            e.HasOne<GameNightGame>().WithMany().HasForeignKey(l => l.GameId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(l => l.GameId).IsUnique();
+            e.HasIndex(l => l.GuildId);
+        });
+
+        modelBuilder.Entity<GameNightSeason>(e =>
+        {
+            e.Property(s => s.Id).ValueGeneratedNever();
+            e.Property(s => s.Name).HasMaxLength(SeasonNameLength);
+            e.HasOne<GameNightLeague>().WithMany().HasForeignKey(s => s.LeagueId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => new { s.LeagueId, s.StartsAt });
+        });
+
+        modelBuilder.Entity<GameNightPlayerRating>(e =>
+        {
+            e.Property(r => r.Id).ValueGeneratedNever();
+            e.ToTable(t => t.HasCheckConstraint("CK_GameNightPlayerRatings_OnePlayer", "(\"UserId\" IS NULL) <> (\"GuestId\" IS NULL)"));
+            e.HasOne<GameNightLeague>().WithMany().HasForeignKey(r => r.LeagueId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<GameNightSeason>().WithMany().HasForeignKey(r => r.SeasonId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<GameNightGuest>().WithMany().HasForeignKey(r => r.GuestId).OnDelete(DeleteBehavior.Restrict);
+            // One rating per player per league per season; the all-time rows (no season) have their own unique indexes because
+            // the database treats NULL seasons as different from each other.
+            e.HasIndex(r => new { r.LeagueId, r.SeasonId, r.UserId }).IsUnique();
+            e.HasIndex(r => new { r.LeagueId, r.SeasonId, r.GuestId }).IsUnique();
+            e.HasIndex(r => new { r.LeagueId, r.UserId }).IsUnique().HasFilter("\"SeasonId\" IS NULL AND \"UserId\" IS NOT NULL");
+            e.HasIndex(r => new { r.LeagueId, r.GuestId }).IsUnique().HasFilter("\"SeasonId\" IS NULL AND \"GuestId\" IS NOT NULL");
+            e.HasIndex(r => r.UserId);
+        });
+
+        modelBuilder.Entity<GameNightRatingEvent>(e =>
+        {
+            e.Property(r => r.Id).ValueGeneratedNever();
+            e.ToTable(t => t.HasCheckConstraint("CK_GameNightRatingEvents_OnePlayer", "(\"UserId\" IS NULL) <> (\"GuestId\" IS NULL)"));
+            e.HasOne<GameNightLeague>().WithMany().HasForeignKey(r => r.LeagueId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<GameNightResult>().WithMany().HasForeignKey(r => r.ResultId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<GameNightGuest>().WithMany().HasForeignKey(r => r.GuestId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(r => new { r.LeagueId, r.SeasonId, r.UserId, r.PlayedAt });
+            e.HasIndex(r => r.ResultId);
         });
 
         modelBuilder.Entity<GameNightSignal>(e =>

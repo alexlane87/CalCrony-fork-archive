@@ -39,6 +39,23 @@ public sealed class GameNightsApiClient(HttpClient http)
         SendAsync<EventVenueDto>(
             http.PutAsJsonAsync($"/guilds/{guildId}/game-nights/events/{eventId}/venue/areas/{areaId}", new SetEventAreaRequest(on), ct), ct);
 
+    /// <summary>A game's league table: the running season's, or the all-time one.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="gameId">The game.</param>
+    /// <param name="allTime">True for the all-time table.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>The table, or a display-ready error.</returns>
+    public Task<ApiResult<LeagueStandingsDto>> GetStandingsAsync(long guildId, Guid gameId, bool allTime = false, CancellationToken ct = default) =>
+        SendAsync<LeagueStandingsDto>(http.GetAsync($"/guilds/{guildId}/game-nights/games/{gameId}/league?allTime={allTime}", ct), ct);
+
+    /// <summary>A member's ratings across the league tables.</summary>
+    /// <param name="guildId">The Discord guild (server) id.</param>
+    /// <param name="userId">The member.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>Their ratings, or a display-ready error.</returns>
+    public Task<ApiResult<List<MyRatingDto>>> GetMyRatingsAsync(long guildId, long userId, CancellationToken ct = default) =>
+        SendAsync<List<MyRatingDto>>(http.GetAsync($"/guilds/{guildId}/game-nights/leagues/me?userId={userId}", ct), ct);
+
     /// <summary>Reports a result for a table (the bot names the reporter).</summary>
     /// <param name="guildId">The Discord guild (server) id.</param>
     /// <param name="tableId">The table.</param>

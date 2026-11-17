@@ -173,6 +173,10 @@ public class GameNightTable
     /// <summary>Who may see the table. Public by default; a table that is not public can never carry a league.</summary>
     public GameNightsVisibility Visibility { get; set; } = GameNightsVisibility.Public;
 
+    /// <summary>True while a confirmed result of this table counts towards a league. A database check constraint makes
+    /// this impossible for a table that is not public.</summary>
+    public bool InLeague { get; set; }
+
     /// <summary>Who is sitting.</summary>
     public List<GameNightTableSeat> Seats { get; set; } = [];
 }
@@ -325,4 +329,101 @@ public class GameNightMemberName
 
     /// <summary>When the bot last looked.</summary>
     public NodaTime.Instant UpdatedAt { get; set; }
+}
+
+/// <summary>A game's league: open-ended, one per game. It is made the first time a confirmed result of a rated game
+/// counts. Ratings are always rebuilt from the confirmed results, in order, so correcting or voiding one is just a rebuild.</summary>
+public class GameNightLeague
+{
+    /// <summary>The league id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The Discord guild (server) id.</summary>
+    public long GuildId { get; set; }
+
+    /// <summary>The game (one league per game).</summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>When the league was made.</summary>
+    public NodaTime.Instant CreatedAt { get; set; }
+}
+
+/// <summary>A season of a league: a stretch of time with its own ratings, starting everyone fresh. Seasons never overlap.</summary>
+public class GameNightSeason
+{
+    /// <summary>The season id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The league.</summary>
+    public Guid LeagueId { get; set; }
+
+    /// <summary>The season's name.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>When it starts (results from a night at or after this count in it).</summary>
+    public NodaTime.Instant StartsAt { get; set; }
+
+    /// <summary>When it ends (exclusive); null while it is running.</summary>
+    public NodaTime.Instant? EndsAt { get; set; }
+}
+
+/// <summary>A player's rating in a league: the all-time one (<see cref="SeasonId"/> null) and one per season they played in.
+/// A member by Discord id, or a guest. Created by the player's first counted result.</summary>
+public class GameNightPlayerRating
+{
+    /// <summary>The row id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The league.</summary>
+    public Guid LeagueId { get; set; }
+
+    /// <summary>The season, or null for the all-time rating.</summary>
+    public Guid? SeasonId { get; set; }
+
+    /// <summary>A Discord member.</summary>
+    public long? UserId { get; set; }
+
+    /// <summary>A guest.</summary>
+    public Guid? GuestId { get; set; }
+
+    /// <summary>The exact rating.</summary>
+    public double Rating { get; set; }
+
+    /// <summary>How many confirmed games it is built from.</summary>
+    public int GamesPlayed { get; set; }
+}
+
+/// <summary>One game's effect on one player's rating (a league entry). Only results of public tables on public nights ever
+/// get these.</summary>
+public class GameNightRatingEvent
+{
+    /// <summary>The row id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The league.</summary>
+    public Guid LeagueId { get; set; }
+
+    /// <summary>The season it counted in, or null for the all-time rating.</summary>
+    public Guid? SeasonId { get; set; }
+
+    /// <summary>The result.</summary>
+    public Guid ResultId { get; set; }
+
+    /// <summary>A Discord member.</summary>
+    public long? UserId { get; set; }
+
+    /// <summary>A guest.</summary>
+    public Guid? GuestId { get; set; }
+
+    /// <summary>Where they finished.</summary>
+    public int? Placement { get; set; }
+
+    /// <summary>Their rating before.</summary>
+    public double Before { get; set; }
+
+    /// <summary>Their rating after.</summary>
+    public double After { get; set; }
+
+    /// <summary>When the night was (the event's start), which is what orders results and picks the season.</summary>
+    public NodaTime.Instant PlayedAt { get; set; }
 }
