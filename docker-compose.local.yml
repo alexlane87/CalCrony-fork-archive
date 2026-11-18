@@ -1,0 +1,35 @@
+# Fork: LOCAL DEV stack (tier 1 of 3: local dev -> staging on the Pi -> prod on the Pi).
+#
+# An override for docker-compose.yml, which already builds every image from this working tree.
+# It adds what a developer needs and nothing the Pi stacks use. Use the wrapper
+# (tools/local-stack.ps1) or spell it out:
+#
+#   docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# Copy .env.local.example to .env.local first (it is git-ignored). With no Discord credentials the
+# API, web and database still run and the bot idles, which is enough for website work.
+#
+#   web  http://localhost:8082      api  http://localhost:8080      postgres  localhost:5433
+name: calcrony-dev
+
+services:
+  postgres:
+    ports: !override
+      - "${LOCAL_DB_PORT:-5433}:5432"   # not 5432, so it never clashes with a Postgres installed on the PC
+
+  api:
+    environment:
+      # Game Nights is on locally so it can be exercised end to end before it is promoted.
+      GameNights__Enabled: ${GAMENIGHTS_ENABLED:-true}
+      GameNights__SeedGuildIds: ${GAMENIGHTS_SEED_GUILD_IDS:-}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+
+  web:
+    environment:
+      ROBOTS_MODE: disallow
+
+  bot:
+    environment:
+      GameNights__Enabled: ${GAMENIGHTS_ENABLED:-true}
+      # Registers slash commands to the dev server instantly (global registration takes up to an hour).
+      Discord__TestGuildId: ${DISCORD_TEST_GUILD_ID:-}
