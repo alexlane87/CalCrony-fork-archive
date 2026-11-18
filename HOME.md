@@ -6,33 +6,55 @@ not here.
 
 ## Branches and environments
 
-| Branch | Deploys to | Purpose |
-|---|---|---|
-| `dev` (default) | **test** stack on the Pi (test Discord app, test server) | Integration branch. All work lands here first, by PR. |
-| `prod` | **prod** stack on the Pi (West Country Leders) | What is live. Only takes PRs from `dev`. |
-| `master` | nothing | Clean mirror of upstream `master`. Fast-forward only, never commit here. |
+Three tiers, each a step closer to the members:
 
-`dev` and `prod` are protected: changes go in by pull request, the `build-test` and `pr-source`
-checks must pass, and force-pushes and deletion are blocked. `master` only blocks force-pushes and
-deletion.
+| Tier | Branch | Runs on | Purpose |
+|---|---|---|---|
+| 1. local dev | `dev` (default) | your PC, `docker-compose.local.yml` | Integration branch. All work lands here first, by PR. Nothing is published or deployed from it. Own Discord app and server. |
+| 2. staging | `staging` | **staging** stack on the Pi (LAN only) | A real deployed copy to check a change on the Pi's hardware, with the test Discord app and server. Takes PRs from `dev`, or from a `promote/*` branch holding a hand-picked subset of `dev`. |
+| 3. prod | `prod` | **prod** stack on the Pi (West Country Leders) | What is live. Only takes PRs from `staging`. |
+| | `master` | nothing | Clean mirror of upstream `master`. Fast-forward only, never commit here. |
+
+`dev`, `staging` and `prod` are protected: changes go in by pull request, the `build-test` and
+`pr-source` checks must pass, and force-pushes and deletion are blocked. `master` only blocks
+force-pushes and deletion. `dev` can be ahead of `staging`, and `staging` ahead of `prod`: a feature
+(Game Nights is the first) stays on `dev` until you choose to promote it.
+
+## Local dev stack
+
+```powershell
+tools/local-stack.ps1 up        # builds from your working tree: web :8082, api :8080, postgres :5433
+tools/local-stack.ps1 logs api
+tools/local-stack.ps1 reset     # delete the local database
+```
+
+The first `up` creates `.env.local` from [`.env.local.example`](.env.local.example). Without Discord
+credentials the web app, API and database run and the bot idles, which is enough for website work.
+For the bot and sign-in, create a separate **dev** Discord application and server, put its values in
+`.env.local`, and add `http://localhost:8080/auth/discord/callback` as an OAuth redirect. Never reuse
+the staging or prod bot token: two running copies of one bot both answer every command. Game Nights
+is switched on locally (`GAMENIGHTS_ENABLED`). Needs Docker Desktop running.
 
 ## Shipping a change
 
 ```bash
 git checkout dev && git pull
 git checkout -b fix/poll-picker
-# ...commit...
+# ...commit, try it with tools/local-stack.ps1 up...
 gh pr create --base dev            # CI runs; squash-merge when green
 ```
 
-1. Merging to `dev` builds arm64 images (`X.Y.Z-dev.N`) and moves the `:dev` tag. The Pi notices
-   within a couple of minutes, deploys the test stack, and posts start/finish messages in the
-   test server's deploy channel.
-2. Try the change in the test Discord server.
-3. Promote: `gh pr create --base prod --head dev --title "release: <what>"`, then merge it with a
-   **merge commit** (not squash, so `dev` and `prod` keep a shared history). That builds
-   `X.Y.Z-wcl.N`, moves `:prod`, and the Pi backs up, deploys and health-checks prod, rolling back
-   to the previous images if the new ones do not come up healthy.
+1. **Local.** Merging to `dev` runs the build and tests only.
+2. **Staging.** `gh pr create --base staging --head dev --title "promote: <what>"`, merged with a
+   **merge commit** (not squash, so the branches keep a shared history). That builds arm64 images
+   (`X.Y.Z-stg.N`) and moves the `:staging` tag. The Pi notices within a couple of minutes, deploys
+   the staging stack, and posts start/finish messages in the staging server's deploy channel. Try it
+   in the staging Discord server.
+   To promote only *some* of what is on `dev`: branch from `staging` as `promote/<what>`,
+   `git cherry-pick` the commits, and open the PR from that branch.
+3. **Prod.** `gh pr create --base prod --head staging --title "release: <what>"`, merged with a
+   merge commit. That builds `X.Y.Z-wcl.N`, moves `:prod`, and the Pi backs up, deploys and
+   health-checks prod, rolling back to the previous images if the new ones do not come up healthy.
 
 Everything is in `.github/workflows/wcl-pipeline.yml`. The Pi side (deploy script, timers,
 notifications, rollback) is documented in `alex-pi-1` under `stack/calcrony/README.md`.
@@ -42,7 +64,7 @@ undo a migration; the pre-deploy backup is the way back from a bad schema change
 
 ## Syncing from upstream
 
-Upstream changes go through `dev` and the test stack like anything else:
+Upstream changes go through `dev`, then staging, like anything else:
 
 ```bash
 git fetch upstream --tags
