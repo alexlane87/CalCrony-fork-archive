@@ -10,8 +10,9 @@
 </div>
 
 @code {
-    // CalCrony's default theme is dark — an explicit product decision, not "auto".
-    private string current = "dark";
+    // Fork default (West Country Leaders): auto, following the device's light/dark setting.
+    // Upstream's default is dark. Keep in step with theme-init.js and site.js.
+    private string current = "auto";
 
     private DotNetObjectReference<ThemeToggle>? selfRef;
 
