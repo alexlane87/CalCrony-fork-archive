@@ -193,6 +193,7 @@ the Bot assembly (a folder) to be covered by it.
 | `GuildTabs.razor`, `NavMenu.razor` | new tabs/links | 2+ |
 | `DiscordInvite.Permissions` + test + README | add CreatePrivateThreads, AttachFiles if needed | 8/10 |
 | `ActionLogAction`, `ActionTargetType` | append values | as needed |
+| `CreateEventRequest` + `EventEndpoints.CreateEvent` | three optional **bot-only** fields: `PostViaOutbox`, `InitialAttendeeIds`, `NativeEventId` (event import; ignored for web callers, defaults change nothing) | import |
 
 ## Open decisions for the owner (from this recon)
 
