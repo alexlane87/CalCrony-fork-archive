@@ -95,6 +95,8 @@ Keep this list short: every entry is a potential merge conflict on upstream sync
 - **Game Nights extension** (in progress, see `PLAN.md` and `docs/FORK-NOTES.md`): lives in `GameNights/`
   folders in Api, Contracts and Web behind the `GameNights:Enabled` flag (default off). Core edits are listed in
   FORK-NOTES (Program.cs, `CalCronyDbContext` partial + one call, `RoleWatchList`, and later steps' seams).
+- **Event import** (`tools/import-discord-events/`): one-off script moving upcoming Discord scheduled events into
+  CalCrony. Touches core only through three optional bot-only fields on `CreateEventRequest` (see FORK-NOTES section 12).
 - `src/CalCrony.Web/Pages/Privacy.razor` and `Terms.razor`: operator is **West Country Leders**
   (not the upstream maintainer), contact is the community's mod team, "last updated" dates bumped.
   The sections describing what the software stores are untouched, so they stay correct. After an
