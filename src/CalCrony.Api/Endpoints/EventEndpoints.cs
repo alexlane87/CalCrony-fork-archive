@@ -11,6 +11,9 @@ namespace CalCrony.Api.Endpoints;
 /// <summary>Event CRUD, RSVPs, datetime tooling, and the shared guild/event guards other endpoint groups reuse.</summary>
 public static class EventEndpoints
 {
+    /// <summary>Fork (event import): the most members one create call may seat.</summary>
+    private const int MaxInitialAttendees = 500;
+
     /// <summary>Maps event, RSVP, and datetime-tool routes.</summary>
     /// <param name="app">The route builder to map onto.</param>
     public static void MapEventEndpoints(this IEndpointRouteBuilder app)
@@ -476,6 +479,16 @@ public static class EventEndpoints
         var wantsThread = request.WantsThread;
         var allowMultiple = request.AllowMultipleRsvps;
 
+        // Fork (event import): bot-only extras, ignored for the web. See CreateEventRequest.
+        var postViaOutbox = isBot && request.PostViaOutbox;
+        var initialAttendeeIds = isBot
+            ? (request.InitialAttendeeIds ?? []).Where(id => id > 0).Distinct().ToList()
+            : [];
+        if (initialAttendeeIds.Count > MaxInitialAttendees)
+        {
+            return Results.BadRequest(new ErrorResponse($"At most {MaxInitialAttendees} initial attendees."));
+        }
+
         // Custom RSVP options + the attending-option limit/role shorthands (defaults apply when
         // unspecified) and the optional RSVP cutoff — relative text becomes minutes-before (tracks
         // time edits), absolute text parses in the same zone as the start time.
@@ -635,8 +648,28 @@ public static class EventEndpoints
             Series = series,
             CreatedAt = now,
             Options = options,
+            NativeEventId = isBot ? request.NativeEventId : null,
         };
         db.Events.Add(ev);
+
+        // Fork (event import): seat the given members before the embed is first rendered. Same rows
+        // PutRsvp writes; no role or thread work, because an imported event carries neither.
+        if (initialAttendeeIds.Count > 0 && RsvpPolicy.AttendingOption(options) is { } attending)
+        {
+            // CreatedAt doubles as the waitlist queue position, so give each row its own instant.
+            for (var i = 0; i < initialAttendeeIds.Count; i++)
+            {
+                db.Rsvps.Add(new Rsvp
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = ev.Id,
+                    UserId = initialAttendeeIds[i],
+                    OptionId = attending.Id,
+                    Waitlisted = attending.Capacity is int cap && i >= cap,
+                    CreatedAt = now.Plus(Duration.FromMilliseconds(i)),
+                });
+            }
+        }
 
         // Template notification specs go onto the event and — when a series was created — onto
         // its spec list with lineage, exactly like hand-added Series-scope notifications, so
@@ -673,9 +706,10 @@ public static class EventEndpoints
             }
         }
 
-        if (!isBot)
+        if (!isBot || postViaOutbox)
         {
-            // The bot posts the embed itself on /create; web creates hand that job to the outbox.
+            // The bot posts the embed itself on /create; web creates hand that job to the outbox
+            // (and so does a bot caller that asked for it: PostViaOutbox, used by the event import).
             db.Deliveries.Add(new Delivery
             {
                 Id = Guid.NewGuid(),

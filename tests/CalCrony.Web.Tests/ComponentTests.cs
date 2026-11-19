@@ -150,7 +150,7 @@ public class ComponentTests : TestContext
             .Build());
 
     [Fact]
-    public void Theme_toggle_defaults_to_dark()
+    public void Theme_toggle_highlights_the_stored_mode()
     {
         JSInterop.Mode = JSRuntimeMode.Loose; // the toggle also registers a mode watcher
         JSInterop.Setup<string>("calcronyTheme.getTheme").SetResult("dark");

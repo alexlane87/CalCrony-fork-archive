@@ -18,7 +18,7 @@ public class ThemeComponentTests : TestContext
     private static readonly JsonSerializerOptions JsonWeb = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public async Task Picker_renders_all_five_themes_and_marks_the_stored_one_selected()
+    public async Task Picker_renders_all_six_themes_and_marks_the_stored_one_selected()
     {
         UseApi();
         await SetupAuthAsync(signedIn: false);
@@ -29,10 +29,11 @@ public class ThemeComponentTests : TestContext
         cut.WaitForAssertion(() =>
         {
             var tiles = cut.FindAll("button.theme-tile");
-            Assert.Equal(5, tiles.Count);
+            Assert.Equal(6, tiles.Count);
             var selected = tiles.Single(t => t.ClassList.Contains("selected"));
             Assert.Contains("Tavern Ember", selected.TextContent);
         });
+        Assert.Contains("West Country Leaders", cut.Markup);
         Assert.Contains("Candlelit Slate", cut.Markup);
         Assert.Contains("Obsidian Azure", cut.Markup);
     }
@@ -48,7 +49,7 @@ public class ThemeComponentTests : TestContext
             : JsonSerializer.Serialize(new UserSettingsDto("America/Chicago", false, "moss"), JsonWeb);
 
         var cut = Render<InterfaceThemePicker>();
-        cut.WaitForAssertion(() => Assert.Equal(5, cut.FindAll("button.theme-tile").Count));
+        cut.WaitForAssertion(() => Assert.Equal(6, cut.FindAll("button.theme-tile").Count));
 
         cut.FindAll("button.theme-tile").Single(t => t.TextContent.Contains("Feywild Moss")).Click();
 
@@ -72,7 +73,7 @@ public class ThemeComponentTests : TestContext
         JSInterop.Setup<string>("calcronyTheme.getTheme").SetResult("dark");
 
         var cut = Render<InterfaceThemePicker>();
-        cut.WaitForAssertion(() => Assert.Equal(5, cut.FindAll("button.theme-tile").Count));
+        cut.WaitForAssertion(() => Assert.Equal(6, cut.FindAll("button.theme-tile").Count));
 
         cut.FindAll("button.theme-tile").Single(t => t.TextContent.Contains("Parchment")).Click();
 
@@ -92,7 +93,7 @@ public class ThemeComponentTests : TestContext
         handler.StatusFor = req => req.Method == HttpMethod.Get ? HttpStatusCode.InternalServerError : HttpStatusCode.OK;
 
         var cut = Render<InterfaceThemePicker>();
-        cut.WaitForAssertion(() => Assert.Equal(5, cut.FindAll("button.theme-tile").Count));
+        cut.WaitForAssertion(() => Assert.Equal(6, cut.FindAll("button.theme-tile").Count));
 
         cut.FindAll("button.theme-tile").Single(t => t.TextContent.Contains("Feywild Moss")).Click();
 

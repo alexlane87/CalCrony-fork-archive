@@ -1,4 +1,4 @@
-/* CalCrony interface themes (issue #78): five themes, each with a dark and a light FACE.
+/* CalCrony interface themes (issue #78): six themes (five upstream + the fork's West Country Leaders), each with a dark and a light FACE.
    data-cc-theme picks the theme (slate = default · ember · moss · parchment · obsidian);
    data-bs-theme picks the face — both set before first paint by theme-init.js.
 
@@ -36,6 +36,30 @@
     --cc-accent-press: #6f78ea;
     --cc-accent-soft: rgba(139, 147, 248, 0.13);
     --cc-accent-ink: #12131d;
+}
+
+/* West Country Leaders — dark face (fork addition; default theme). The community website's brand
+   slate (#2c3e50) deepened into a night surface, with its orange lifted to #f08f3a so it holds
+   4.5:1 on every surface including cards. Ink on the accent is a near-black brown. */
+[data-bs-theme="dark"][data-cc-theme="wcl"] {
+    --cc-gilt: #d3a655;
+    --cc-ground: #1b2631;
+    --cc-base: #212f3d;
+    --cc-base-rgb: 33, 47, 61;
+    --cc-raised: #2a3a4a;
+    --cc-text: #ecf0f1;
+    --cc-text-rgb: 236, 240, 241;
+    --cc-muted: #a7b4c0;
+    --cc-muted-rgb: 167, 180, 192;
+    --cc-line: rgba(236, 240, 241, 0.11);
+    --cc-line-strong: rgba(236, 240, 241, 0.19);
+    --cc-accent: #f08f3a;
+    --cc-accent-rgb: 240, 143, 58;
+    --cc-accent-hover: #f5a259;
+    --cc-accent-hover-rgb: 245, 162, 89;
+    --cc-accent-press: #d97a26;
+    --cc-accent-soft: rgba(240, 143, 58, 0.14);
+    --cc-accent-ink: #1b1208;
 }
 
 /* Tavern Ember — firelit umber and brass. */
@@ -129,6 +153,31 @@
     --cc-accent-hover-rgb: 58, 65, 172;
     --cc-accent-press: #333a9a;
     --cc-accent-soft: rgba(68, 76, 190, 0.12);
+    --cc-accent-ink: #ffffff;
+}
+
+/* West Country Leaders — light face (fork addition; default theme). The website's own palette:
+   off-white page (#f8f9fa), warm paper surfaces, brand slate text (#2c3e50). The brand orange
+   (#e67e22) is only 2.7:1 on the page, so text-sized accents use a burnt orange (#a24a07,
+   5.7:1 on the page, 4.8:1 on the paper ground); the brand orange stays in decoration. */
+[data-bs-theme="light"][data-cc-theme="wcl"] {
+    --cc-gilt: #71581c;
+    --cc-ground: #ede6dc;
+    --cc-base: #f8f9fa;
+    --cc-base-rgb: 248, 249, 250;
+    --cc-raised: #fffdf9;
+    --cc-text: #2c3e50;
+    --cc-text-rgb: 44, 62, 80;
+    --cc-muted: #566573;
+    --cc-muted-rgb: 86, 101, 115;
+    --cc-line: rgba(44, 62, 80, 0.14);
+    --cc-line-strong: rgba(44, 62, 80, 0.24);
+    --cc-accent: #a24a07;
+    --cc-accent-rgb: 162, 74, 7;
+    --cc-accent-hover: #8f4106;
+    --cc-accent-hover-rgb: 143, 65, 6;
+    --cc-accent-press: #7d3905;
+    --cc-accent-soft: rgba(162, 74, 7, 0.11);
     --cc-accent-ink: #ffffff;
 }
 
@@ -336,3 +385,50 @@
 
 .text-primary { color: var(--cc-accent) !important; }
 .bg-primary-soft { background-color: var(--cc-accent-soft); }
+
+/* ── West Country Leaders look (fork addition) ───────────────────────────────── */
+
+/* The website's Quicksand, bold headings, and its 12px rounding. Declared on the same element
+   as fonts.css's :root rules but loaded after them, so these win. */
+[data-cc-theme="wcl"] {
+    --bs-body-font-family: "Quicksand", system-ui, "Segoe UI", sans-serif;
+    --calcrony-display-font: "Quicksand", system-ui, "Segoe UI", sans-serif;
+    --bs-border-radius: 0.75rem;
+    --bs-border-radius-lg: 1rem;
+}
+
+[data-cc-theme="wcl"] :is(h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6,
+        .display-1, .display-2, .display-3, .display-4, .display-5, .display-6,
+        .card-title, .display-title) {
+    font-weight: 700;
+}
+
+[data-cc-theme="wcl"] .card { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+
+/* The website's wooden plank, on the mobile top bar and the sidebar's brand block. The wood
+   is light in both faces, so its ink is the website's dark walnut (4.8:1 or better on every
+   stop of the gradient). */
+[data-cc-theme="wcl"] .app-topbar,
+[data-cc-theme="wcl"] .sidebar-head {
+    background-color: #d4a76a;
+    background-image:
+        repeating-linear-gradient(to bottom, transparent, transparent 1px, rgba(0, 0, 0, 0.03) 1.5px, transparent 2px),
+        linear-gradient(to bottom, #f3d19e 0%, #d4a76a 50%, #c39a5e 100%);
+    border: 3px solid #4d2d18;
+    border-bottom-width: 5px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25), inset 0 2px 0 rgba(255, 255, 255, 0.35);
+    color: #4d2d18;
+}
+[data-cc-theme="wcl"] .app-topbar { border-width: 0 0 5px; }
+[data-cc-theme="wcl"] .sidebar-head { border-radius: 12px; padding: 0.7rem 0.75rem !important; margin-bottom: 0.6rem; }
+[data-cc-theme="wcl"] .app-topbar .wordmark,
+[data-cc-theme="wcl"] .app-topbar .wordmark b,
+[data-cc-theme="wcl"] .sidebar-head .wordmark,
+[data-cc-theme="wcl"] .sidebar-head .wordmark b,
+[data-cc-theme="wcl"] .app-topbar .brand-mark,
+[data-cc-theme="wcl"] .sidebar-head .brand-mark { color: #4d2d18; }
+[data-cc-theme="wcl"] .app-topbar .btn { --bs-btn-color: #4d2d18; --bs-btn-border-color: #4d2d18; --bs-btn-hover-bg: rgba(77, 45, 24, 0.12); --bs-btn-hover-color: #4d2d18; --bs-btn-hover-border-color: #4d2d18; --bs-btn-active-bg: rgba(77, 45, 24, 0.18); --bs-btn-active-color: #4d2d18; }
+
+/* "West Country Leaders" under the wordmark: only this theme shows it. */
+.wcl-tag { display: none; }
+[data-cc-theme="wcl"] .wcl-tag { display: block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; line-height: 1.1; color: #4d2d18; }

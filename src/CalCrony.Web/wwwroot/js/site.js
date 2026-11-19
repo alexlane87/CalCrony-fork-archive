@@ -6,7 +6,7 @@
 (function () {
     var cc = window.calcronyTheme = window.calcronyTheme || {};
     cc.modes = cc.modes || ["dark", "light", "auto"];
-    cc.themes = cc.themes || ["slate", "ember", "moss", "parchment", "obsidian"];
+    cc.themes = cc.themes || ["wcl", "slate", "ember", "moss", "parchment", "obsidian"];
     cc.modeWatchers = [];
 
     // Sanitize on read AND write, matching theme-init.js: stale/edited localStorage must never
@@ -14,7 +14,7 @@
     cc.getTheme = function () {
         var mode;
         try { mode = localStorage.getItem("calcrony-theme"); } catch { mode = null; }
-        return cc.modes.indexOf(mode) >= 0 ? mode : "dark";
+        return cc.modes.indexOf(mode) >= 0 ? mode : "auto";
     };
 
     cc.setTheme = function (theme) {
@@ -44,7 +44,7 @@
     cc.getThemeName = function () {
         var name;
         try { name = localStorage.getItem("calcrony-theme-name"); } catch { name = null; }
-        return cc.themes.indexOf(name) >= 0 ? name : "slate";
+        return cc.themes.indexOf(name) >= 0 ? name : "wcl";
     };
 
     cc.setThemeName = function (name) {
