@@ -4,6 +4,8 @@
 
   export   Read a server's upcoming Discord scheduled events (GET requests only) into a JSON file.
            Needs the bot token: DISCORD_BOT_TOKEN in --env-file or the environment.
+  lookup   Find member and role ids by name (GET only), for events that exist only as a third-party
+           bot's posts (Apollo shows nicknames, not ids) and have to be written into the JSON by hand.
   apply    Create them in CalCrony through its API. A DRY RUN unless --execute is given.
            Needs CALCRONY_API_KEY (the bot's API key) in --env-file or the environment.
 
@@ -119,6 +121,29 @@ def cmd_export(a):
         print(f"  {e['start'][:16]}  {len(e['interested'])} interested  {e['name']}")
 
 
+# ---------------------------------------------------------------- lookup
+def cmd_lookup(a):
+    env = read_env(a.env_file)
+    token = setting(env, "DISCORD_BOT_TOKEN")
+    if not token:
+        sys.exit("DISCORD_BOT_TOKEN not found (use --env-file or the environment).")
+    auth = {"Authorization": "Bot " + token}
+    for name in a.member or []:
+        q = urllib.parse.quote(name)
+        st, found = http("GET", f"{DISCORD}/guilds/{a.guild}/members/search?query={q}&limit=10", auth)
+        print(f"member {name!r}: " + ("no match" if not found else f"{len(found)} match(es)") if st == 200 else f"member {name!r}: HTTP {st}")
+        for m in (found or []) if st == 200 else []:
+            u = m["user"]
+            print(f"   {u['id']}  username={u['username']!r}  global={u.get('global_name')!r}  nick={m.get('nick')!r}")
+    if a.role:
+        st, roles = http("GET", f"{DISCORD}/guilds/{a.guild}/roles", auth)
+        for name in a.role:
+            hits = [r for r in (roles or []) if name.lower() in r["name"].lower()] if st == 200 else []
+            print(f"role {name!r}: " + ("no match" if not hits else f"{len(hits)} match(es)"))
+            for r in hits:
+                print(f"   {r['id']}  {r['name']!r}  managed={r.get('managed')}")
+
+
 # ---------------------------------------------------------------- apply
 def local_texts(start_utc, zone):
     local = start_utc.astimezone(zone)
@@ -148,6 +173,8 @@ def cmd_apply(a):
             sys.exit(f'--repeat expects "Exact title=2w" (weeks) or "Exact title=3d" (days), got: {item}')
         repeats[title.strip()] = (1 if spec[-1] == "w" else 0, int(spec[:-1]))
 
+    skip = {t.strip() for t in a.skip or []}
+
     st, settings = http("GET", f"{api}/guilds/{guild}/settings", auth)
     if st != 200 or not settings:
         sys.exit(f"Could not read server settings from {api} (HTTP {st}): {settings}")
@@ -171,7 +198,9 @@ def cmd_apply(a):
         start = parse_iso(e["start"])
         end = parse_iso(e["end"]) if e.get("end") else None
         tag = f"{start.astimezone(zone):%a %d %b %Y %H:%M}  {e['name']}"
-        if e["native_id"] in linked:
+        if e["name"].strip() in skip:
+            print(f"SKIP   {tag}\n       excluded with --skip"); continue
+        if e.get("native_id") and e["native_id"] in linked:
             print(f"SKIP   {tag}\n       already linked to this Discord event"); continue
         if (e["name"].strip().lower(), start) in seen:
             print(f"SKIP   {tag}\n       an event with this title and start already exists"); continue
@@ -193,24 +222,43 @@ def cmd_apply(a):
             "whenText": when_text,
             "channelId": int(channel),
             "description": e["description"] or None,
-            "durationMinutes": max(1, round((end - start).total_seconds() / 60)) if end else None,
+            "durationMinutes": (max(1, round((end - start).total_seconds() / 60)) if end
+                                else e.get("duration_minutes")),
             "location": e["location"] or None,
             "imageUrl": e.get("image_url"),
             "postViaOutbox": True,
-            "initialAttendeeIds": [] if a.no_attendees else [int(u) for u in e["interested"]],
-            "nativeEventId": None if a.no_link else int(e["native_id"]),
+            "initialAttendeeIds": [] if a.no_attendees else [int(u) for u in e.get("going") or e.get("interested") or []],
+            "nativeEventId": int(e["native_id"]) if e.get("native_id") and not a.no_link else None,
         }
+        if e.get("allowed_role_ids"):
+            body["allowedRoleIds"] = [int(r) for r in e["allowed_role_ids"]]
+        if e.get("attendee_limit"):
+            body["attendeeLimit"] = int(e["attendee_limit"])
         rule = repeats.get(e["name"].strip())
         if rule:
             body["recurrence"] = {"unit": rule[0], "interval": rule[1], "monthlyMode": 0, "daysOfWeek": 0}
         what = "repeats every {} {}".format(rule[1], "week(s)" if rule[0] == 1 else "day(s)") if rule else "single event"
         print(f"{'CREATE' if a.execute else 'WOULD '} {tag}\n       {what}; {len(body['initialAttendeeIds'])} going; "
-              f"{'adopts Discord event ' + e['native_id'] if body['nativeEventId'] else 'no Discord link'}; "
+              f"{'adopts Discord event ' + str(body['nativeEventId']) if body['nativeEventId'] else 'no Discord link'}; "
+              f"{'limit ' + str(body['attendeeLimit']) + '; ' if body.get('attendeeLimit') else ''}"
+              f"{'signup restricted to ' + str(len(body['allowedRoleIds'])) + ' role(s); ' if body.get('allowedRoleIds') else ''}"
               f"duration {body['durationMinutes']} min; location {body['location']!r}; start text {when_text!r}")
         if not a.execute:
             continue
         st, made = http("POST", f"{api}/guilds/{guild}/events", auth, body)
         if st == 201:
+            # An API older than this tool ignores the bot-only fields: the event would exist but never be
+            # posted and carry no attendees. Check, and if so undo this one and stop.
+            wrong = []
+            if len(made.get("rsvps") or []) != len(set(body["initialAttendeeIds"])):
+                wrong.append("attendees were not saved")
+            if body["nativeEventId"] and made.get("nativeEventId") != body["nativeEventId"]:
+                wrong.append("the Discord event was not adopted")
+            if wrong:
+                http("DELETE", f"{api}/events/{made['id']}", auth)
+                sys.exit(f"STOPPED: {' and '.join(wrong)}. This CalCrony API is probably older than the importer "
+                         f"(deploy the version with PostViaOutbox first). The event just created was deleted again; "
+                         f"{created} earlier event(s) from this run are fine.")
             created += 1
             print(f"       created {made['id']}")
             seen.add((e["name"].strip().lower(), start))
@@ -230,12 +278,19 @@ def main():
     x.add_argument("--out", required=True)
     x.add_argument("--env-file")
     x.set_defaults(fn=cmd_export)
+    z = sub.add_parser("lookup", help="find member / role ids by name (read only)")
+    z.add_argument("--guild", required=True)
+    z.add_argument("--env-file")
+    z.add_argument("--member", action="append", help="name to search (nickname or username prefix); repeatable")
+    z.add_argument("--role", action="append", help="role name fragment; repeatable")
+    z.set_defaults(fn=cmd_lookup)
     y = sub.add_parser("apply", help="create them in CalCrony (dry run unless --execute)")
     y.add_argument("--file", required=True)
     y.add_argument("--guild", help="target server id (default: the one in the file)")
     y.add_argument("--api", help="CalCrony API base URL (default from CALCRONY_BIND_IP/CALCRONY_API_PORT in --env-file)")
     y.add_argument("--env-file")
     y.add_argument("--repeat", action="append", metavar='"TITLE=2w"', help="make this event a repeating series (weeks w / days d)")
+    y.add_argument("--skip", action="append", metavar='"TITLE"', help="leave out the event with this exact title; repeatable")
     y.add_argument("--no-attendees", action="store_true", help="do not carry the interested members over")
     y.add_argument("--no-link", action="store_true", help="do not adopt the Discord event (use when importing into a different server)")
     y.add_argument("--execute", action="store_true", help="actually create the events")
