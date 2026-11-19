@@ -92,6 +92,9 @@ Keep this list short: every entry is a potential merge conflict on upstream sync
   events when the user is in exactly one CalCrony server (`/app?all=1` always shows the list; the
   sidebar and the pages' back links use it). Touches `Landing.razor`, `Guilds.razor` and the guild
   pages' back links.
+- **Event import** (`tools/import-discord-events/`): one-off script moving upcoming Discord scheduled events into
+  CalCrony. Touches core only through three optional bot-only fields on `CreateEventRequest` (`PostViaOutbox`,
+  `InitialAttendeeIds`, `NativeEventId`) and the matching branch in `EventEndpoints.CreateEvent`.
 - `src/CalCrony.Web/Pages/Privacy.razor` and `Terms.razor`: operator is **West Country Leders**
   (not the upstream maintainer), contact is the community's mod team, "last updated" dates bumped.
   The sections describing what the software stores are untouched, so they stay correct. After an
