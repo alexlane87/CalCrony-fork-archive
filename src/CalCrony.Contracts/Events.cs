@@ -53,6 +53,16 @@ public enum EventStatus
 /// once (Tank AND Healer; Dinner AND Movie). Default off keeps today's one-choice behaviour, where
 /// picking another option switches. Honored for both caller types (like WantsThread — it hands out
 /// nothing). Becomes the series template value when the event recurs.</param>
+/// <param name="PostViaOutbox">Fork (event import), bot callers only: when true the API queues the
+/// embed post to the channel instead of leaving it to the calling bot. A bot normally posts its own
+/// embed after /create; a script holding only the API key has no way to, so this asks the bot's
+/// delivery poller to. Ignored for the web, which always posts through the outbox.</param>
+/// <param name="InitialAttendeeIds">Fork (event import), bot callers only: Discord user ids seated on
+/// the attending option when the event is created, so the first post already lists them (RSVPs set
+/// afterwards by a bot never re-render the embed). Over capacity goes on the waitlist. For a repeating
+/// event only the first occurrence gets them. Max 500, duplicates ignored.</param>
+/// <param name="NativeEventId">Fork (event import), bot callers only: an existing Discord scheduled
+/// event to adopt as this event's native twin, so mirroring updates it instead of creating a second.</param>
 public record CreateEventRequest(
     long CreatorId,
     string Title,
@@ -73,7 +83,10 @@ public record CreateEventRequest(
     int? AttendeeLimit = null,
     string? RsvpCloseText = null,
     IReadOnlyList<long>? AllowedRoleIds = null,
-    bool AllowMultipleRsvps = false);
+    bool AllowMultipleRsvps = false,
+    bool PostViaOutbox = false,
+    IReadOnlyList<long>? InitialAttendeeIds = null,
+    long? NativeEventId = null);
 
 /// <summary>Partial update; null fields are left unchanged. Scope is required when the target is
 /// the live occurrence of a non-ended series and ignored otherwise.</summary>
