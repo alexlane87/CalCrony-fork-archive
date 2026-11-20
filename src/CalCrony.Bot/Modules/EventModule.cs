@@ -72,7 +72,7 @@ public class EventModule(
         [Summary("repeat-count", "Total occurrences including the first (2-500)"), MinValue(2), MaxValue(500)] int? repeatCount = null,
         [Summary("template", "Start from a saved template"), Autocomplete(typeof(TemplateNameAutocompleteHandler))] string? template = null,
         [Summary("attendee-role", "Existing role given to attending RSVPs (removed when the event ends)")] IRole? attendeeRole = null,
-        [Summary("thread", "Open a discussion thread on the event message (attending RSVPs are added)")] bool thread = false,
+        [Summary("thread", "Open a discussion thread on the event message (on by default; set false to skip)")] bool? thread = null,
         [Summary("rsvp-options", "Custom RSVP buttons, e.g. \"⚔️ Raider x10, 🛡️ Standby, ❌ Out\" — first is the attending one")] string? rsvpOptions = null,
         [Summary("attendee-limit", "Max attendees — extra RSVPs join a waitlist and are promoted when a spot frees"), MinValue(1)] int? attendeeLimit = null,
         [Summary("rsvp-close", "When RSVPs stop, e.g. \"2h before\" or \"friday 5pm\""), MaxLength(DateTextLimits.MaxLength)] string? rsvpClose = null,
@@ -117,7 +117,11 @@ public class EventModule(
             return;
         }
 
-        if (thread && !Context.Guild.CurrentUser.GetPermissions(targetChannel).CreatePublicThreads)
+        // Threads are on by default: an unset option means "yes if I can" (so a channel where the
+        // bot lacks Create Public Threads still takes events), while an explicit true still refuses.
+        var canThread = Context.Guild.CurrentUser.GetPermissions(targetChannel).CreatePublicThreads;
+        var wantsThread = thread ?? canThread;
+        if (thread == true && !canThread)
         {
             await FollowupAsync(
                 $"I need the **Create Public Threads** permission in {targetChannel.Mention} to open a discussion thread.",
@@ -164,7 +168,7 @@ public class EventModule(
                 recurrence, repeatUntil, repeatCount,
                 resolvedTemplate?.Id, NoRecurrence: repeat == RepeatChoice.None,
                 AttendeeRoleId: (long?)attendeeRole?.Id,
-                WantsThread: thread,
+                WantsThread: wantsThread,
                 RsvpOptions: optionSpecs,
                 AttendeeLimit: attendeeLimit,
                 RsvpCloseText: rsvpClose,
